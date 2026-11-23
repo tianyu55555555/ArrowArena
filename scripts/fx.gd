@@ -71,7 +71,7 @@ func _draw() -> void:
 	var k := clampf(t / life, 0.0, 1.0)
 	match kind:
 		"text":
-			var font := ThemeDB.fallback_font
+			var font := PixelSprites.ui_font()
 			draw_string_outline(font, Vector2(-100, 0), text, HORIZONTAL_ALIGNMENT_CENTER, 200, font_size, 5, Color(0, 0, 0, 0.85))
 			draw_string(font, Vector2(-100, 0), text, HORIZONTAL_ALIGNMENT_CENTER, 200, font_size, color)
 		"hit_impact":
@@ -153,7 +153,7 @@ func _draw() -> void:
 					draw_texture_rect(_basin_tex, Rect2(-bw * 0.5, -bh * 0.62, bw, bh), false)
 					draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
 				if show_duang and ek < 0.78:
-					var font := ThemeDB.fallback_font
+					var font := PixelSprites.ui_font()
 					var dy := -bh * 0.85 - ease_out * 36.0
 					var fsz := int(22 + basin_scale * 4)
 					draw_string_outline(font, Vector2(-90, dy), "DUANG!", HORIZONTAL_ALIGNMENT_CENTER, 180, fsz, 5, Color(0.06, 0.12, 0.25, 0.92))

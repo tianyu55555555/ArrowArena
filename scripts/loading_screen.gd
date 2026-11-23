@@ -190,7 +190,7 @@ func _draw_scene() -> void:
 	_canvas.draw_rect(Rect2(bx, by, bw, 16), Color(0.14, 0.18, 0.28))
 	_canvas.draw_rect(Rect2(bx, by, bw * _progress, 16), _accent)
 
-	var font := ThemeDB.fallback_font
+	var font := PixelSprites.ui_font()
 	var pct := "%d%%" % int(round(_progress * 100.0))
 	_canvas.draw_string(font, Vector2(bx + bw + 14, by + 14), pct, HORIZONTAL_ALIGNMENT_LEFT, -1, 16, Color.WHITE)
 

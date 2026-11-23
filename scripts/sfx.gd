@@ -13,6 +13,7 @@ var _streams: Dictionary = {}
 var _bgm_streams: Dictionary = {}
 var _bgm_player: AudioStreamPlayer = null
 var _bgm_track := ""
+var _web_audio_unlocked := false
 var _players: Array[AudioStreamPlayer] = []
 var _cursor := 0
 var _last_play_ms: Dictionary = {}
@@ -45,6 +46,16 @@ static func play_bgm(track: String) -> void:
 	if _inst == null or not is_instance_valid(_inst):
 		return
 	_inst._play_bgm_internal(track)
+
+
+static func unlock_web_audio() -> void:
+	if not OS.has_feature("web") or _inst == null or not is_instance_valid(_inst):
+		return
+	if _inst._web_audio_unlocked:
+		return
+	_inst._web_audio_unlocked = true
+	if not bgm_muted and _inst._bgm_track != "":
+		_inst._play_bgm_internal(_inst._bgm_track, true)
 
 
 static func toggle_bgm_mute() -> bool:
@@ -149,7 +160,7 @@ func _build_all_sounds() -> void:
 	_streams["revive"] = _synth_arpeggio([440.0, 554.37, 659.25, 880.0], 0.06, "sine", 0.36)
 
 
-func _make_wav(samples: PackedFloat32Array) -> AudioStreamWAV:
+func _make_wav(samples: PackedFloat32Array, rate := MIX_RATE) -> AudioStreamWAV:
 	var bytes := PackedByteArray()
 	bytes.resize(samples.size() * 2)
 	for i in samples.size():
@@ -158,7 +169,7 @@ func _make_wav(samples: PackedFloat32Array) -> AudioStreamWAV:
 		bytes[i * 2 + 1] = (v >> 8) & 0xFF
 	var wav := AudioStreamWAV.new()
 	wav.format = AudioStreamWAV.FORMAT_16_BITS
-	wav.mix_rate = MIX_RATE
+	wav.mix_rate = rate
 	wav.stereo = false
 	wav.data = bytes
 	return wav
@@ -298,8 +309,9 @@ func _synth_bgm(track: String) -> AudioStreamWAV:
 		]
 		arp_chords = [[57, 60, 64], [53, 57, 60], [55, 59, 62], [52, 56, 59]]
 
+	var rate := 11025 if OS.has_feature("web") else MIX_RATE
 	var steps := melody.size()
-	var step_n := int(step_sec * MIX_RATE)
+	var step_n := int(step_sec * rate)
 	var total := steps * step_n
 	var buf := PackedFloat32Array()
 	buf.resize(total)
@@ -324,17 +336,17 @@ func _synth_bgm(track: String) -> AudioStreamWAV:
 			var atk := minf(1.0, k * 28.0)
 			var sample := 0.0
 			if fm > 0.0:
-				ph_m += TAU * fm / float(MIX_RATE)
+				ph_m += TAU * fm / float(rate)
 				# 柔和方波 + 三角波混合，保留 8-bit 芯片质感但不刺耳
 				var sq := 0.65 if fposmod(ph_m, TAU) < PI * 0.72 else -0.65
 				var tr := _osc(ph_m, "tri")
 				var env_m := atk * pow(1.0 - k * 0.78, 1.3)
 				sample += lerpf(tr, sq, 0.42 if is_battle else 0.25) * env_m * 0.28
 			if fb > 0.0:
-				ph_b += TAU * fb / float(MIX_RATE)
+				ph_b += TAU * fb / float(rate)
 				var env_b := atk * pow(1.0 - k * 0.65, 1.1)
 				sample += _osc(ph_b, "tri") * env_b * (0.30 if is_battle else 0.24)
-			ph_a += TAU * fa / float(MIX_RATE)
+			ph_a += TAU * fa / float(rate)
 			var env_a := atk * pow(1.0 - k, 1.6)
 			sample += sin(ph_a) * env_a * (0.14 if is_battle else 0.16)
 			# 战斗曲加入轻量像素打击节奏（底鼓/轻踩镲）
@@ -348,7 +360,7 @@ func _synth_bgm(track: String) -> AudioStreamWAV:
 			lp = lerpf(lp, sample, 0.36)
 			buf[idx] = clampf(lp, -0.95, 0.95)
 
-	var wav := _make_wav(buf)
+	var wav := _make_wav(buf, rate)
 	wav.loop_mode = AudioStreamWAV.LOOP_FORWARD
 	wav.loop_begin = 0
 	wav.loop_end = total

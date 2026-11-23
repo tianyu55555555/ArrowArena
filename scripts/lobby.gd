@@ -86,6 +86,7 @@ func _ready() -> void:
 	set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	MetaSave.ensure_loaded()
 	var th := Theme.new()
+	th.default_font = PixelSprites.ui_font()
 	th.default_font_size = 15
 	theme = th
 
@@ -136,6 +137,7 @@ func _ready() -> void:
 		Sfx.play("ui_click")
 		_open_lan_modal()
 	)
+	_lan_top_btn.visible = not OS.has_feature("web")
 	top_bar.add_child(_lan_top_btn)
 
 	_talent_top_btn = Button.new()
@@ -196,7 +198,9 @@ func _ready() -> void:
 	main_vb.add_child(body)
 
 	var footer_note := Label.new()
-	footer_note.text = "非官方免费公益同人二创 · 仅限学习交流与亲友局域网联机，严禁任何商业用途 · 纯本地存档无联网上报"
+	footer_note.text = ("网页单人试玩版（支持 iOS / 安卓 / 电脑） · 手机请横屏游玩 · 非官方免费公益同人二创，严禁商用"
+		if OS.has_feature("web")
+		else "非官方免费公益同人二创 · 仅限学习交流与亲友局域网联机，严禁任何商业用途 · 纯本地存档无联网上报")
 	footer_note.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	footer_note.add_theme_font_size_override("font_size", 11)
 	footer_note.add_theme_color_override("font_color", Color(0.62, 0.70, 0.82, 0.72))
@@ -1422,6 +1426,11 @@ func _refresh_lan_modal() -> void:
 	_lan_leave_btn.text = "解散房间" if is_h else "离开房间"
 	_lan_start_btn.disabled = not is_h
 	_lan_start_btn.text = "⚡ 全员出击！开始联机对局" if is_h else "⏳ 等待房主点击开始对局..."
+
+
+func _input(event: InputEvent) -> void:
+	if OS.has_feature("web") and ((event is InputEventScreenTouch and (event as InputEventScreenTouch).pressed) or (event is InputEventMouseButton and (event as InputEventMouseButton).pressed)):
+		Sfx.unlock_web_audio()
 
 
 func _process(delta: float) -> void:

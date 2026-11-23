@@ -90,7 +90,7 @@ func _draw() -> void:
 
 # ================= PVP 五宫格决斗场绘制 =================
 func _draw_pvp_5grid(h: float, pulse: float, vr: Rect2) -> void:
-	var font := ThemeDB.fallback_font
+	var font := PixelSprites.ui_font()
 	# 1. 场外深渊石底
 	draw_rect(Rect2(-h - 1600, -h - 1600, (h + 1600) * 2, (h + 1600) * 2), Color("#101420"))
 

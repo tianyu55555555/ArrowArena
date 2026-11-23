@@ -1288,7 +1288,7 @@ func _ai(delta: float) -> void:
 
 # ================= 绘制 =================
 func _draw() -> void:
-	var font := ThemeDB.fallback_font
+	var font := PixelSprites.ui_font()
 	var sc := radius / BASE_RADIUS
 
 	if is_player and not game.autotest:

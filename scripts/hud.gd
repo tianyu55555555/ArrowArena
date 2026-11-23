@@ -70,6 +70,7 @@ func _ready() -> void:
 	root.set_anchors_preset(Control.PRESET_FULL_RECT)
 	root.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	var th := Theme.new()
+	th.default_font = PixelSprites.ui_font()
 	th.default_font_size = 18
 	root.theme = th
 	add_child(root)
@@ -1039,7 +1040,7 @@ func _process(delta: float) -> void:
 
 # ================= 绘制 =================
 func _text(canvas: Control, pos: Vector2, s: String, size: int, col: Color, align := HORIZONTAL_ALIGNMENT_LEFT, width := -1.0) -> void:
-	var font := ThemeDB.fallback_font
+	var font := PixelSprites.ui_font()
 	canvas.draw_string_outline(font, pos, s, align, width, size, 5, Color(0, 0, 0, 0.8))
 	canvas.draw_string(font, pos, s, align, width, size, col)
 

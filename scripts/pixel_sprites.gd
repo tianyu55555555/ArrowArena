@@ -14,6 +14,16 @@ static var _chest_tex: ImageTexture = null
 static var _grass_tile: ImageTexture = null
 static var _obstacle_cache: Dictionary = {}
 static var _prop_cache: Dictionary = {}
+static var _ui_font: Font = null
+
+
+static func ui_font() -> Font:
+	if _ui_font == null:
+		if ResourceLoader.exists("res://assets/fonts/zpix.ttf"):
+			_ui_font = load("res://assets/fonts/zpix.ttf") as Font
+		if _ui_font == null:
+			_ui_font = ThemeDB.fallback_font
+	return _ui_font
 
 
 static func get_character_frames(char_id: String) -> Array:
