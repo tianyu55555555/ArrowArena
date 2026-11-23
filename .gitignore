@@ -1,0 +1,12 @@
+# Godot 4 自动生成的导入缓存与构建产物（不要提交到 GitHub）
+.godot/
+*.translation
+*.import.tmp
+
+# 打包输出目录与临时文件
+build/
+builds/
+*.exe
+*.pck
+*.zip
+*.log

@@ -1,0 +1,23 @@
+; Engine configuration file.
+; Godot 4.7.2 - GDScript project (AI 娘像素大乱斗 · 公益科普版)
+
+config_version=5
+
+[application]
+
+config/name="ArrowArena"
+run/main_scene="res://scenes/app.tscn"
+config/features=PackedStringArray("4.7", "GL Compatibility")
+
+[display]
+
+window/size/viewport_width=1280
+window/size/viewport_height=720
+window/stretch/mode="canvas_items"
+window/stretch/aspect="expand"
+
+[rendering]
+
+renderer/rendering_method="gl_compatibility"
+renderer/rendering_method.mobile="gl_compatibility"
+environment/defaults/default_clear_color=Color(0.08, 0.10, 0.14, 1)
