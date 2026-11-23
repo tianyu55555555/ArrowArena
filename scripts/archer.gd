@@ -105,6 +105,10 @@ var emote_cd := 0.0
 var crit_chance := 0.05
 var lifesteal := 0.0
 var regen := 0.0
+var antiheal_power := 0.0   # 攻击附带重伤比例（抑制目标吸血与回血）
+var antiheal_timer := 0.0   # 自身受重伤剩余时长
+var antiheal_ratio := 0.0   # 自身当前受重伤减疗比例
+var _fan_heal_cd := 0.0     # Qwen 折扇回血内置冷却（防多扇无限回满）
 var perm_orbit_blades := 0  # 幸存者模式常驻护体星刃数
 var sub_orbital_lv := 0     # DeepSeek 天降铁盆等级
 var sub_lightning_lv := 0   # Gemini 连锁星雷等级
@@ -148,10 +152,12 @@ var pending_lasers: Array[Dictionary] = []
 var level := 1
 var xp := 0.0
 var tokens := 0
+var kill_score := 0
 var score := 0
 var kills := 0
 var radius := BASE_RADIUS
 var alive := true
+var respawn_timer := 0.0
 
 # ---- 运行与操控 ----
 var move_dir := Vector2.ZERO
@@ -197,7 +203,7 @@ func _apply_kit() -> void:
 	move_speed = (255.0 if is_surv else 245.0) * float(cd["speed_mult"]) * (MetaSave.speed_mult() if (is_surv and is_player) else 1.0)
 	damage = base_dmg * float(cd["damage_mult"]) * float(wd["damage_mult"]) * (MetaSave.atk_mult() if (is_surv and is_player) else 1.0)
 	fire_interval = float(wd["fire_interval"]) * (0.90 if is_surv else 1.04)
-	attack_range = float(wd["range"])
+	attack_range = float(wd["range"]) * (1.12 if is_surv else 0.88)
 	arrow_speed = float(wd["speed"])
 	active_cd_base = float(cd["active_cd"])
 	pickup_range = (155.0 * (MetaSave.magnet_mult() if is_player else 1.0)) if is_surv else 120.0
@@ -209,7 +215,7 @@ func _apply_kit() -> void:
 		"claude":
 			max_shield = max_hp * (0.32 if is_surv else 0.24)
 			shield = max_shield
-			attack_range *= 1.10
+			attack_range *= 1.08
 		"grok":
 			crit_chance = 0.24 if is_surv else 0.15
 		"qwen":
@@ -217,6 +223,92 @@ func _apply_kit() -> void:
 
 	_frames = PixelSprites.get_character_frames(char_id)
 	_weapon_tex = PixelSprites.get_weapon_texture(weapon_id)
+	refresh_pvp_score()
+
+
+func level_score() -> int:
+	return level * 40
+
+
+func refresh_pvp_score() -> void:
+	if game != null and game.game_mode == "pvp":
+		score = kill_score + level_score()
+
+
+func add_kill_score(pts: int) -> void:
+	kill_score += pts
+	if game != null and game.game_mode == "pvp":
+		refresh_pvp_score()
+	else:
+		score += pts
+
+
+func apply_antiheal(ratio: float, dur := 4.0) -> void:
+	if ratio <= 0.0:
+		return
+	antiheal_timer = maxf(antiheal_timer, dur)
+	antiheal_ratio = maxf(antiheal_ratio, clampf(ratio, 0.0, 0.75))
+
+
+func heal_hp(amount: float) -> float:
+	if amount <= 0.0 or not alive:
+		return 0.0
+	var mult := (1.0 - antiheal_ratio) if antiheal_timer > 0.0 else 1.0
+	var eff := amount * mult
+	hp = minf(max_hp, hp + eff)
+	return eff
+
+
+func drop_half_level_and_respawn(spawn_pos: Vector2) -> void:
+	var old_lv := level
+	var new_lv := maxi(1, int(old_lv / 2))
+	var keep_picks := maxi(0, new_lv - 1)
+	var flat: Array[String] = []
+	for sid: String in skills:
+		if sid == "pvp_heal":
+			continue
+		for _k in int(skills[sid]):
+			flat.append(sid)
+	flat.shuffle()
+	var kept := flat.slice(0, mini(flat.size(), keep_picks))
+
+	# 重置基础战斗属性并按降级后的新等级与保留词条精确重算
+	max_shield = 0.0; shield = 0.0; temp_hp = 0.0; max_temp_hp = 0.0
+	front_arrows = 1; diagonal_count = 0; side_arrows = false; back_arrow = false
+	pierce = 0; bounce = 0; phase_wall = false; wall_pierce = false
+	crit_chance = 0.05; lifesteal = 0.0; regen = 0.0
+	antiheal_power = 0.0; antiheal_timer = 0.0; antiheal_ratio = 0.0
+	active_cd_mult = 1.0; active_cd = 0.0
+	skills.clear()
+	_apply_kit()
+
+	level = new_lv
+	xp = 0.0
+	for _lv_i in (new_lv - 1):
+		max_hp += 18.0
+		damage += 0.9
+		if char_id == "gpt":
+			fire_interval *= 0.98
+			move_speed *= 1.018
+	for sid in kept:
+		Skills.apply(self, sid)
+	radius = BASE_RADIUS * minf(1.0 + (level - 1) * 0.024, 1.42)
+	hp = max_hp
+	shield = max_shield
+	alive = true
+	downed = false
+	respawn_timer = 0.0
+	invuln = 2.8
+	position = spawn_pos
+	net_target_pos = spawn_pos
+	visible = true
+	refresh_pvp_score()
+	if game != null:
+		game.spawn_burst(position, accent_color, 58.0)
+		var txt := ("复活！Lv%d → Lv%d" % [old_lv, new_lv]) if old_lv > new_lv else "重返战场！"
+		game.spawn_text(position + Vector2(0, -radius - 34), txt, Color("#5ce8ff"), 20)
+		if is_player:
+			Sfx.play("revive", 0.02, 150, -6.0)
 
 
 func xp_needed() -> float:
@@ -340,6 +432,10 @@ func _physics_process(delta: float) -> void:
 		return
 
 	if not alive:
+		if game != null and game.game_mode == "pvp" and respawn_timer > 0.0:
+			respawn_timer = maxf(0.0, respawn_timer - delta)
+			if respawn_timer <= 0.0:
+				drop_half_level_and_respawn(game._spawn_pos_for(team_id))
 		return
 
 	# PVE 双人合作倒地待救援状态（队友靠近 2.2s 拉起，或 15s 自动复苏！）
@@ -370,6 +466,11 @@ func _physics_process(delta: float) -> void:
 	invuln = maxf(invuln - delta, 0.0)
 	trap_hit_cd = maxf(trap_hit_cd - delta, 0.0)
 	storm_tick_cd = maxf(storm_tick_cd - delta, 0.0)
+	_fan_heal_cd = maxf(_fan_heal_cd - delta, 0.0)
+	if antiheal_timer > 0.0:
+		antiheal_timer = maxf(antiheal_timer - delta, 0.0)
+		if antiheal_timer <= 0.0:
+			antiheal_ratio = 0.0
 	emote_timer = maxf(emote_timer - delta, 0.0)
 	emote_cd = maxf(emote_cd - delta, 0.0)
 	hit_flash = maxf(hit_flash - delta, 0.0)
@@ -397,15 +498,15 @@ func _physics_process(delta: float) -> void:
 				max_temp_hp = 0.0
 
 	if has_rune("regen"):
-		hp = minf(max_hp, hp + 22.0 * delta)
+		heal_hp(22.0 * delta)
 
 	# PVP 5 宫格特殊房间实时增益查询（南·数据缓修站：仅脱战 3 秒后缓慢回血 +6/秒，防站撸超标！）
 	room_buff = game.room_effect_at(position) if game.game_mode == "pvp" else ""
 	if room_buff == "heal_spring" and out_of_combat >= 3.0:
-		hp = minf(max_hp, hp + 6.0 * delta)
+		heal_hp(6.0 * delta)
 
 	if regen > 0.0:
-		hp = minf(max_hp, hp + max_hp * regen * delta)
+		heal_hp(max_hp * regen * delta)
 
 	if char_id == "claude":
 		var sh_ratio := 0.32 if game.game_mode == "survivor" else 0.24
@@ -576,7 +677,7 @@ func _update_actives(delta: float) -> void:
 	# Claude 圣典领域
 	if domain_timer > 0.0:
 		domain_timer -= delta
-		hp = minf(max_hp, hp + (28.0 if is_surv else 18.0) * delta)
+		heal_hp((28.0 if is_surv else 18.0) * delta)
 		domain_tick -= delta
 		if domain_tick <= 0.0:
 			domain_tick = 0.45
@@ -881,9 +982,12 @@ func _shoot() -> void:
 
 func on_fan_caught() -> void:
 	if char_id == "qwen" or evolved_weapon == "evo_fan":
-		var heal := (18.0 if evolved_weapon == "evo_fan" else 10.0) if game.game_mode == "survivor" else 6.0
-		hp = minf(max_hp, hp + heal)
-		fire_cd = maxf(0.0, fire_cd - 0.12)
+		var is_surv := (game != null and game.game_mode == "survivor")
+		if _fan_heal_cd <= 0.0:
+			var heal := (14.0 if evolved_weapon == "evo_fan" else 8.0) if is_surv else 3.0
+			heal_hp(heal)
+			_fan_heal_cd = 0.18 if is_surv else 0.50
+		fire_cd = maxf(0.0, fire_cd - (0.12 if is_surv else 0.08))
 
 
 func take_damage(amount: float, attacker: Archer, is_crit := false, hit_impulse := Vector2.ZERO) -> void:
@@ -952,9 +1056,14 @@ func take_damage(amount: float, attacker: Archer, is_crit := false, hit_impulse 
 			game.add_shake(2.6)
 
 	if valid_attacker:
+		if attacker.antiheal_power > 0.0:
+			var was_ah := antiheal_timer > 0.0
+			apply_antiheal(attacker.antiheal_power, 4.0)
+			if not was_ah:
+				game.spawn_text(position + Vector2(0, -radius - 34), "重伤 -%d%%治疗!" % int(round(antiheal_ratio * 100.0)), Color("#d45cff"), 16)
 		var ls := attacker.effective_lifesteal()
 		if ls > 0.0:
-			attacker.hp = minf(attacker.max_hp, attacker.hp + amount * ls)
+			attacker.heal_hp(amount * ls)
 	if hp <= 0.0:
 		# Mid Boss 复活甲：致命一击触发黄金浴火重生（回复 75% 生命 + 2.2s 无敌 + 震退周遭敌人！）
 		if revive_charges > 0:
@@ -1007,7 +1116,10 @@ func _die(killer: Archer) -> void:
 	_pending_basins.clear()
 	if killer != null:
 		killer.kills += 1
-		killer.score += 60 + level * 25
+		if game != null and game.game_mode == "pvp":
+			killer.add_kill_score(100)
+		else:
+			killer.score += 60 + level * 25
 		var xp_reward := (20.0 + level * 14.0) * (1.25 if killer.char_id == "gpt" else 1.0)
 		killer.gain_xp(xp_reward)
 		if killer.char_id == "grok":
@@ -1035,6 +1147,7 @@ func level_up() -> void:
 		fire_interval *= 0.98
 		move_speed *= 1.018
 	radius = BASE_RADIUS * minf(1.0 + (level - 1) * 0.024, 1.42)
+	refresh_pvp_score()
 	if is_player:
 		Sfx.play("levelup", 0.02, 200, -7.0)
 		game.queue_skill_pick()
@@ -1072,11 +1185,13 @@ func _ai(delta: float) -> void:
 				move_dir = game.steer(position, (op - position).normalized(), radius)
 		return
 
-	# PVP 决胜圈收缩时：若身处安全圈外或临近圈边，立刻优先向中央决斗场收缩！
+	# PVP 决胜圈收缩时：若身处安全圈外或临近圈边，沿唯一出入口优先向中央决斗场收缩！
+	var eff_rng := effective_attack_range()
 	if game.storm_active and position.length() > maxf(game.storm_radius - 140.0, 120.0):
-		var in_dir := (-position).normalized()
+		var wp := game.doorway_waypoint(position, Vector2.ZERO)
+		var in_dir := (wp - position).normalized() if position.distance_squared_to(wp) > 4.0 else (-position).normalized()
 		move_dir = game.steer(position, in_dir, radius)
-		var s_threat := game.find_nearest_enemy(self, attack_range * 0.92)
+		var s_threat := game.find_nearest_enemy(self, eff_rng * 0.96)
 		if s_threat != null:
 			aim_dir = (s_threat.position - position).normalized()
 			wants_fire = true
@@ -1088,9 +1203,10 @@ func _ai(delta: float) -> void:
 	if hp < max_hp * 0.45:
 		var hpos := game.pickups.find_nearest_heart_pos(position, 640.0)
 		if hpos != Vector2.INF:
-			var hdir := (hpos - position).normalized()
+			var hwp := game.doorway_waypoint(position, hpos)
+			var hdir := (hwp - position).normalized()
 			move_dir = game.steer(position, hdir, radius)
-			var threat := game.find_nearest_enemy(self, attack_range)
+			var threat := game.find_nearest_enemy(self, eff_rng)
 			if threat != null:
 				aim_dir = (threat.position - position).normalized()
 				wants_fire = true
@@ -1101,9 +1217,10 @@ func _ai(delta: float) -> void:
 	# PVP AI：主动抢夺附近已刷新的四角增益符文
 	var rune_p := game.find_nearest_active_rune(position, 540.0)
 	if rune_p != Vector2.INF and hp > max_hp * 0.35:
-		var rdir := (rune_p - position).normalized()
+		var rwp := game.doorway_waypoint(position, rune_p)
+		var rdir := (rwp - position).normalized()
 		move_dir = game.steer(position, rdir, radius)
-		var r_threat := game.find_nearest_enemy(self, attack_range * 0.9)
+		var r_threat := game.find_nearest_enemy(self, eff_rng * 0.92)
 		if r_threat != null:
 			aim_dir = (r_threat.position - position).normalized()
 			wants_fire = true
@@ -1111,23 +1228,24 @@ func _ai(delta: float) -> void:
 			aim_dir = rdir
 		return
 
-	var enemy: Archer = game.find_nearest_enemy(self, 700.0)
+	var enemy: Archer = game.find_nearest_enemy(self, 680.0)
 	if last_attacker != null and is_instance_valid(last_attacker) and last_attacker.alive \
-			and position.distance_squared_to(last_attacker.position) < 700.0 * 700.0:
+			and position.distance_squared_to(last_attacker.position) < 680.0 * 680.0:
 		enemy = last_attacker
 
 	# 若中央 Mid Boss 存活且在附近、无贴脸敌人时，主动集火争夺 Mid Boss！
 	if not game.mid_boss.is_empty():
 		var mbp: Vector2 = game.mid_boss["pos"]
 		var mb_d := position.distance_to(mbp)
-		if mb_d < 560.0 and (enemy == null or position.distance_to(enemy.position) > 300.0):
+		if mb_d < 560.0 and (enemy == null or position.distance_to(enemy.position) > 280.0):
 			var to_mb := (mbp - position) / maxf(mb_d, 0.001)
 			aim_dir = to_mb
-			if mb_d <= attack_range * 0.88:
-				move_dir = game.steer(position, (to_mb.orthogonal() * ai_strafe + to_mb * ((mb_d - 280.0) / 360.0)).normalized(), radius)
+			if mb_d <= eff_rng * 0.90:
+				move_dir = game.steer(position, (to_mb.orthogonal() * ai_strafe + to_mb * ((mb_d - eff_rng * 0.65) / maxf(eff_rng, 1.0))).normalized(), radius)
 				wants_fire = true
 			else:
-				move_dir = game.steer(position, to_mb, radius)
+				var mwp := game.doorway_waypoint(position, mbp)
+				move_dir = game.steer(position, (mwp - position).normalized(), radius)
 				wants_fire = false
 			return
 
@@ -1140,7 +1258,8 @@ func _ai(delta: float) -> void:
 			if ai_wander == Vector2.ZERO or position.distance_squared_to(ai_wander) < 3600.0:
 				ai_wander = game.random_free_point(150.0, false)
 			goal = ai_wander
-		move_dir = game.steer(position, (goal - position).normalized(), radius)
+		var gwp := game.doorway_waypoint(position, goal)
+		move_dir = game.steer(position, (gwp - position).normalized(), radius)
 		aim_dir = move_dir
 		return
 
@@ -1154,15 +1273,16 @@ func _ai(delta: float) -> void:
 		ai_timer = randf_range(1.1, 1.9) if ai_burst_on else randf_range(0.5, 0.95)
 		ai_strafe = 1.0 if randf() < 0.5 else -1.0
 
-	if active_cd <= 0.0 and d < attack_range * 0.82 and randf() < 0.010:
+	if active_cd <= 0.0 and d < eff_rng * 0.88 and randf() < 0.012:
 		trigger_active_skill()
 
-	if d <= attack_range * 0.96:
-		var keep := (d - attack_range * 0.65) / attack_range
+	if d <= eff_rng * 0.96:
+		var keep := (d - eff_rng * 0.65) / maxf(eff_rng, 1.0)
 		move_dir = game.steer(position, (dir.orthogonal() * ai_strafe + dir * keep * 1.8).normalized(), radius)
 		wants_fire = ai_burst_on
 	else:
-		move_dir = game.steer(position, dir, radius)
+		var ewp := game.doorway_waypoint(position, enemy.position)
+		move_dir = game.steer(position, (ewp - position).normalized(), radius)
 		wants_fire = false
 
 
@@ -1242,6 +1362,10 @@ func _draw() -> void:
 		draw_arc(Vector2.ZERO, radius + 11.0, anim_t * 4.0, anim_t * 4.0 + PI * 1.3, 24, accent_color, 2.5)
 	if slow_timer > 0.0:
 		draw_arc(Vector2.ZERO, radius + 4.0, 0.0, TAU, 24, Color(0.4, 0.75, 1.0, 0.8), 2.5)
+	if antiheal_timer > 0.0:
+		for si in 4:
+			var a0 := anim_t * 2.4 + si * PI * 0.5
+			draw_arc(Vector2.ZERO, radius + 12.0, a0, a0 + 0.85, 8, Color(0.84, 0.30, 1.0, 0.92), 3.0)
 
 	var fi := 0
 	if move_dir.length() > 0.1:
@@ -1251,7 +1375,7 @@ func _draw() -> void:
 
 	var spr_sz := 72.0 * sc
 	var tint := Color.WHITE.lerp(Color(2.2, 1.35, 1.35, 1.0), 0.72) if hit_flash > 0.0 else Color.WHITE
-	if phase_wall and (game.point_in_wall(position, 2.0) or game.point_in_rock(position, 2.0)):
+	if phase_wall and game.point_in_thin_wall(position, 2.0):
 		tint = Color(0.55, 0.96, 1.0, 0.66)
 	var sx := (1.0 + hit_squash * 0.24) * (-1.0 if facing_left else 1.0)
 	var sy := 1.0 - hit_squash * 0.20

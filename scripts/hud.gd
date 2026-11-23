@@ -106,8 +106,8 @@ func _build_corner_controls(root: Control) -> void:
 	active_btn.offset_bottom = -24
 	active_btn.focus_mode = Control.FOCUS_NONE
 	active_btn.pressed.connect(func() -> void:
-		if not get_tree().paused and game.player != null:
-			game.player.trigger_active_skill()
+		if not get_tree().paused and game.player != null and game.player.alive and not game.player.downed:
+			game._trigger_local_active()
 	)
 	var sb := StyleBoxFlat.new()
 	sb.bg_color = Color(0.08, 0.11, 0.20, 0.88)
@@ -894,8 +894,24 @@ func show_game_over(reason: String, rank: int, total: int, cp_info: Dictionary =
 		over_stats.text = "【算力潮汐 · %s】 %s · %s\n坚守时长 %d:%02d   ·   抵达：%s\n等级 Lv%d (%s)    消灭怪潮 %d    Token %d%s" % [
 			dd["name"], cd["name"], wd["name"], sv / 60, sv % 60, game.swarm.wave_title(), p.level, p.context_label(), game.swarm.monster_kills, p.tokens, cp_line]
 	else:
-		over_stats.text = "【竞技乱斗 · 平衡PVP】 %s · %s\n排名  %d / %d\n等级 Lv%d (%s)    击杀 %d    Token %d%s" % [
-			cd["name"], wd["name"], rank, total, p.level, p.context_label(), p.kills, p.tokens, cp_line]
+		var lines: Array[String] = []
+		if game.pvp_variant == "2v2v2v2":
+			var tr := game.team_ranking()
+			var win_name := str(tr[0]["name"]) if not tr.is_empty() else ""
+			lines.append("【五宫格 2v2v2v2 积分结算】 获胜阵营：%s" % win_name)
+			for i in tr.size():
+				lines.append("%d. %s — 总分 %d" % [i + 1, tr[i]["name"], int(tr[i]["score"])])
+		else:
+			lines.append("【五宫格 PVP 积分结算】 %s · %s  ·  第 %d / %d 名" % [cd["name"], wd["name"], rank, total])
+		lines.append("你的总分：%d（击杀分 %d [%d杀] + 等级分 %d [Lv%d]）" % [p.score, p.kill_score, p.kills, p.level_score(), p.level])
+		var rk := game.ranking()
+		var top_parts: Array[String] = []
+		for i in mini(4, rk.size()):
+			var ra := rk[i]
+			top_parts.append("%d.%s %d分(杀%d+级%d)" % [i + 1, ra.display_name, ra.score, ra.kill_score, ra.level_score()])
+		if not top_parts.is_empty():
+			lines.append("前四名：" + "  |  ".join(top_parts))
+		over_stats.text = "\n".join(lines) + cp_line
 	over_panel.visible = true
 
 
@@ -919,6 +935,9 @@ func _unhandled_input(event: InputEvent) -> void:
 		return
 	if event is InputEventMouseButton:
 		var mb := event as InputEventMouseButton
+		# 忽略触屏模拟出的鼠标事件，防止手机左手划移动摇杆时误触发开火！
+		if mb.device == InputEvent.DEVICE_ID_EMULATION:
+			return
 		if mb.button_index == MOUSE_BUTTON_LEFT and not aim_joy_active:
 			mouse_fire_held = mb.pressed
 
@@ -1079,8 +1098,8 @@ func _draw_overlay() -> void:
 		_text(overlay, Vector2(18, 108), "  ".join(owned.slice(0, 7)), 14, Color(0.92, 0.96, 1.0))
 		buff_y = 118.0
 
-	# 四角符文增益倒计时徽章 + Mid Boss 复活甲状态栏
-	if p.revive_charges > 0 or not p.rune_timers.is_empty():
+	# 四角符文增益倒计时徽章 + Mid Boss 复活甲 + 重伤减疗状态栏
+	if p.revive_charges > 0 or p.antiheal_timer > 0.0 or not p.rune_timers.is_empty():
 		var bx := 16.0
 		var by := buff_y
 		if p.revive_charges > 0:
@@ -1089,6 +1108,16 @@ func _draw_overlay() -> void:
 			overlay.draw_rect(rrect, Color("#ffe052"), false, 2.0)
 			_text(overlay, Vector2(bx, by + 17.0), "★ 复活甲 ×%d" % p.revive_charges, 13, Color("#ffe86b"), HORIZONTAL_ALIGNMENT_CENTER, 134.0)
 			bx += 142.0
+		if p.antiheal_timer > 0.0:
+			var ahw := 148.0
+			if bx + ahw > 376.0:
+				bx = 16.0
+				by += 28.0
+			var ahrect := Rect2(bx, by, ahw, 24.0)
+			overlay.draw_rect(ahrect, Color(0.24, 0.06, 0.30, 0.90))
+			overlay.draw_rect(ahrect, Color("#d45cff"), false, 1.8)
+			_text(overlay, Vector2(bx, by + 17.0), "[重伤] 治疗-%d%% %ds" % [int(round(p.antiheal_ratio * 100.0)), int(ceil(p.antiheal_timer))], 12, Color("#f2b6ff"), HORIZONTAL_ALIGNMENT_CENTER, ahw)
+			bx += ahw + 6.0
 		for rk in Archer.RUNE_ORDER:
 			var rt := float(p.rune_timers.get(rk, 0.0))
 			if rt <= 0.0:
@@ -1135,7 +1164,7 @@ func _draw_overlay() -> void:
 		var tl := int(ceil(game.time_left))
 		_text(overlay, Vector2(0, 38), "%d:%02d" % [tl / 60, tl % 60], 30, Color.WHITE if tl > 30 else Color(1, 0.4, 0.3), HORIZONTAL_ALIGNMENT_CENTER, vs.x)
 		var pvp_tag := "五宫格 2v2v2v2" if game.pvp_variant == "2v2v2v2" else "五宫格乱斗 PVP"
-		_text(overlay, Vector2(0, 68), "%s  ·  击杀 %d    分数 %d" % [pvp_tag, p.kills, p.score], 17, Color(1, 0.9, 0.6), HORIZONTAL_ALIGNMENT_CENTER, vs.x)
+		_text(overlay, Vector2(0, 68), "%s  ·  总分 %d（击杀 %d + 等级 %d）" % [pvp_tag, p.score, p.kill_score, p.level_score()], 16, Color(1, 0.9, 0.6), HORIZONTAL_ALIGNMENT_CENTER, vs.x)
 		var sub_y := 78.0
 		if not game.mid_boss.is_empty():
 			var mb_hp := float(game.mid_boss["hp"])
@@ -1263,11 +1292,25 @@ func _draw_overlay() -> void:
 		var c := Color(1, 1, 1, clampf(float(f["t"]), 0.0, 1.0))
 		_text(overlay, Vector2(vs.x - 420, 390 + i * 24), str(f["msg"]), 15, c, HORIZONTAL_ALIGNMENT_RIGHT, 408)
 
+	if game.game_mode == "pvp" and not p.alive and p.respawn_timer > 0.0 and not game.game_over:
+		var rbox := Rect2(vs.x * 0.5 - 230, vs.y * 0.42, 460, 74)
+		overlay.draw_rect(rbox, Color(0.08, 0.05, 0.14, 0.86))
+		overlay.draw_rect(rbox, Color("#ff6b8b"), false, 2.4)
+		_text(overlay, Vector2(0, rbox.position.y + 32), "已阵亡 · %.1f 秒后复活重返战场" % p.respawn_timer, 24, Color("#ff8aa2"), HORIZONTAL_ALIGNMENT_CENTER, vs.x)
+		_text(overlay, Vector2(0, rbox.position.y + 58), "复活等级减半（Lv%d → Lv%d） · 击杀分完整保留！" % [p.level, maxi(1, int(p.level / 2))], 15, Color(0.92, 0.96, 1.0), HORIZONTAL_ALIGNMENT_CENTER, vs.x)
+
 	if hint_time > 0.0:
 		var c := Color(1, 1, 1, clampf(hint_time, 0.0, 1.0))
-		var htxt := ("WASD/左摇杆走位 · 辅助自动开火（左键/右摇杆可手动） · 空格/右键大招 · [1-4/T] 热梗气泡"
-			if game.game_mode == "survivor"
-			else "WASD/左摇杆移动 · 左键/右摇杆瞄准开火 · 空格/右键放技能 · [1-4/T] 发战内热梗气泡")
+		var is_touch := OS.get_name() == "Android" or OS.get_name() == "iOS" or DisplayServer.is_touchscreen_available()
+		var htxt := ""
+		if is_touch:
+			htxt = ("左半屏滑屏移动 · 右半屏滑屏随时手动瞄准（已开辅助自动火） · 右下大招 · 左下热梗气泡"
+				if game.game_mode == "survivor"
+				else "左半屏滑屏移动 · 右半屏滑向哪往哪射（可边走边打！） · 右下角大招 · 左下热梗气泡")
+		else:
+			htxt = ("WASD/左摇杆走位 · 辅助自动开火（左键/右摇杆可手动） · 空格/右键大招 · [1-4/T] 热梗气泡"
+				if game.game_mode == "survivor"
+				else "WASD/左摇杆移动 · 左键/右摇杆瞄准开火 · 空格/右键放技能 · [1-4/T] 发战内热梗气泡")
 		_text(overlay, Vector2(0, vs.y - 16), htxt, 14, c, HORIZONTAL_ALIGNMENT_CENTER, vs.x)
 
 	if _move_joy_idx != -1:

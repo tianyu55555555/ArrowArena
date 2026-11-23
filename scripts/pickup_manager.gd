@@ -193,8 +193,10 @@ func _physics_process(delta: float) -> void:
 			var pick_r := a.radius + 14.0
 			if d2 < pick_r * pick_r:
 				var heal := 65.0 if game.game_mode == "pvp" else 95.0
-				a.hp = minf(a.max_hp, a.hp + heal)
-				game.spawn_text(a.position + Vector2(0, -a.radius - 18), "+%d HP" % int(heal), Color(0.42, 1.0, 0.56), 19)
+				var actual := a.heal_hp(heal)
+				var h_lbl := ("+%d HP(重伤)" % int(actual)) if a.antiheal_timer > 0.0 else ("+%d HP" % int(actual))
+				var h_col := Color(0.75, 0.42, 0.96) if a.antiheal_timer > 0.0 else Color(0.42, 1.0, 0.56)
+				game.spawn_text(a.position + Vector2(0, -a.radius - 18), h_lbl, h_col, 19)
 				if a == player:
 					Sfx.play("heart", 0.04, 80, -8.0)
 				hearts[j] = hearts[hearts.size() - 1]
@@ -239,7 +241,8 @@ func _physics_process(delta: float) -> void:
 func _collect_token(a: Archer, val: int) -> void:
 	var eff_val := int(round(val * 1.25)) if a.room_buff == "vault" else val
 	a.tokens += eff_val
-	a.score += eff_val
+	if game.game_mode != "pvp":
+		a.score += eff_val
 	var xp_gain := float(eff_val) * (1.25 if a.char_id == "gpt" else 1.0)
 	if a.is_human() and game.game_mode == "survivor":
 		xp_gain *= MetaSave.xp_mult()

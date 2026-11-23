@@ -7,8 +7,9 @@ extends RefCounted
 const PVP_LIST: Array[Dictionary] = [
 	{"id": "pvp_multishot", "name": "双重齐射", "desc": "正前方弹道 +1\n(单发伤 -26%，射程微缩)", "max": 1, "rarity": "epic", "icon": ">>"},
 	{"id": "pvp_diagonal", "name": "斜翼补箭", "desc": "两侧 38° 额外齐射\n(单发伤 -14%，射程微缩)", "max": 1, "rarity": "epic", "icon": "<^>"},
-	{"id": "pvp_phase_wall", "name": "量子穿墙", "desc": "角色化作量子幽影\n可直接穿过所有墙壁与障碍！", "max": 1, "rarity": "epic", "icon": "PHZ"},
-	{"id": "pvp_wall_pierce", "name": "穿墙弹道", "desc": "子弹无视墙壁与障碍穿墙打击\n(穿墙伤 85%，穿透敌人 +1)", "max": 1, "rarity": "epic", "icon": "W->"},
+	{"id": "pvp_phase_wall", "name": "量子穿墙", "desc": "角色化作量子幽影\n可自由穿过区域内薄墙（无法穿厚墙）！", "max": 1, "rarity": "epic", "icon": "PHZ"},
+	{"id": "pvp_wall_pierce", "name": "穿墙弹道", "desc": "子弹穿透区域内薄墙打击敌人\n(无法穿厚墙，穿薄墙伤 85%，穿透 +1)", "max": 1, "rarity": "epic", "icon": "W->"},
+	{"id": "pvp_antiheal", "name": "重伤断疗", "desc": "命中施加 4 秒重伤\n目标回血与吸血 -40%（最高 -75%）", "max": 3, "rarity": "rare", "icon": "CUT"},
 	{"id": "pvp_pierce", "name": "穿透瞄准", "desc": "投射物穿透敌人 +1", "max": 1, "rarity": "rare", "icon": "==>"},
 	{"id": "pvp_bounce", "name": "精准弹射", "desc": "命中后弹向附近敌人 +1", "max": 1, "rarity": "rare", "icon": "Z->"},
 	{"id": "pvp_crit", "name": "会心一击", "desc": "暴击率 +10%（1.4倍伤）", "max": 2, "rarity": "rare", "icon": "*!*"},
@@ -20,7 +21,7 @@ const PVP_LIST: Array[Dictionary] = [
 	{"id": "pvp_heal", "name": "战术回复", "desc": "立即回复 40% 生命与护盾", "max": 99, "rarity": "common", "icon": "FIX"},
 	{"id": "pvp_lifesteal", "name": "续航汲取", "desc": "造成伤害的 8% 转为生命", "max": 2, "rarity": "rare", "icon": "DRN"},
 	{"id": "pvp_regen", "name": "缓慢再生", "desc": "每秒回复 1.4% 生命", "max": 2, "rarity": "common", "icon": "REG"},
-	{"id": "pvp_range", "name": "远距视界", "desc": "射程 +14%，弹速 +8%", "max": 2, "rarity": "common", "icon": "RNG"},
+	{"id": "pvp_range", "name": "远距视界", "desc": "射程 +10%，弹速 +8%", "max": 2, "rarity": "common", "icon": "RNG"},
 ]
 
 const SURVIVOR_LIST: Array[Dictionary] = [
@@ -173,6 +174,9 @@ static func apply(a: Archer, id: String) -> void:
 		"pvp_wall_pierce":
 			a.wall_pierce = true
 			a.pierce += 1
+		"pvp_antiheal":
+			var lv := int(a.skills.get("pvp_antiheal", 0))
+			a.antiheal_power = 0.40 if lv == 0 else (0.60 if lv == 1 else 0.75)
 		"pvp_pierce":
 			a.pierce += 1
 		"pvp_bounce":
@@ -191,7 +195,7 @@ static func apply(a: Archer, id: String) -> void:
 			a.max_hp += 45.0
 			a.hp += 45.0
 		"pvp_heal":
-			a.hp = minf(a.max_hp, a.hp + a.max_hp * 0.40)
+			a.heal_hp(a.max_hp * 0.40)
 			if a.max_shield > 0.0:
 				a.shield = a.max_shield
 		"pvp_lifesteal":
@@ -199,7 +203,7 @@ static func apply(a: Archer, id: String) -> void:
 		"pvp_regen":
 			a.regen += 0.014
 		"pvp_range":
-			a.attack_range *= 1.14
+			a.attack_range *= 1.10
 			a.arrow_speed *= 1.08
 
 		# --- 幸存者全 6 位 AI 支援副武器 ---

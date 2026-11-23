@@ -523,7 +523,7 @@ func _ready() -> void:
 	pvp_sub_row.add_child(_pvp_team_btn)
 
 	_pvp_note_label = Label.new()
-	_pvp_note_label.text = "五宫格决斗场：四角 6 种神符（15s/60s刷新）+ 中央 Mid Boss（30s全增益+复活）+ 最后 60s 算力坍缩缩圈 + [1-4/T] 热梗气泡！"
+	_pvp_note_label.text = "五宫格决斗场：死亡3s复活掉半级，最终按击杀分+等级分结算！区域厚墙单口，量子穿墙/穿墙弹仅穿室内薄墙！"
 	_pvp_note_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	_pvp_note_label.add_theme_font_size_override("font_size", 12)
 	_pvp_note_label.add_theme_color_override("font_color", Color(0.72, 0.88, 0.98))

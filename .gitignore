@@ -8,5 +8,8 @@ build/
 builds/
 *.exe
 *.pck
+*.apk
 *.zip
 *.log
+*.keystore
+*.local.bat

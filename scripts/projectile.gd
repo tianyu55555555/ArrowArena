@@ -102,18 +102,19 @@ func _physics_process(delta: float) -> void:
 	position += velocity * delta
 	rotation = spin if (weapon_id == "fan" or weapon_id == "starblade" or weapon_id == "basin") else velocity.angle()
 
-	# 障碍物/墙壁/边界碰撞（支持「穿墙弹道」直接穿透所有内部墙壁与障碍物，仅在场地外边界停止/反弹！）
+	# 障碍物/墙壁/边界碰撞：「穿墙弹道」仅穿透区域内薄墙，区域分割厚墙与像素晶柱始终阻挡/反弹！
 	var out_of_bounds := not game.in_arena(position)
-	var hit_interior := (not returning) and (game.point_in_rock(position, 0.0) or game.point_in_wall(position, 0.0))
-	if hit_interior and wall_pierce:
+	var hit_solid := out_of_bounds or ((not returning) and (game.point_in_rock(position, 0.0) or game.point_in_thick_wall(position, 0.0)))
+	var hit_thin := (not returning) and game.point_in_thin_wall(position, 0.0)
+	if hit_thin and wall_pierce:
 		if not _passed_wall:
 			_passed_wall = true
 			damage *= 0.85
 			if not visual_only:
 				game.spawn_burst(position, Color(0.36, 0.95, 1.0), 16.0)
-		hit_interior = false
+		hit_thin = false
 
-	var hit_wall := out_of_bounds or hit_interior
+	var hit_wall := hit_solid or hit_thin
 	if hit_wall:
 		if weapon_id == "fan" and not returning:
 			returning = true

@@ -300,51 +300,91 @@ func _gen_pvp_5grid() -> void:
 			"bg": Color("#2d2244"), "color": Color("#c978ff"),
 		},
 	]
-	# 五宫格主结构石墙（厚 48~52px）+ 房间内部大量薄墙掩体（厚 22px，配合穿墙/穿墙子弹超爽！）
+	# 五宫格主结构厚墙（厚 52px，区域分割完全封闭，每两区之间仅留 1 个 ~3 身位宽 164px 出入口，不可被穿墙！）
+	# + 各区域内部加长加多的金属薄墙掩体（厚 22px，可被「量子穿墙」与「穿墙弹道」穿透！）
 	walls = [
-		# --- 主城厚墙：中央决斗场四面合围（各留 320px 宽拱门）---
-		Rect2(-766.0, -766.0, 606.0, 52.0),
-		Rect2(160.0, -766.0, 606.0, 52.0),
-		Rect2(-766.0, 714.0, 606.0, 52.0),
-		Rect2(160.0, 714.0, 606.0, 52.0),
-		Rect2(-766.0, -714.0, 52.0, 554.0),
-		Rect2(-766.0, 160.0, 52.0, 554.0),
-		Rect2(714.0, -714.0, 52.0, 554.0),
-		Rect2(714.0, 160.0, 52.0, 554.0),
-		# 四角翼墙（留 374px 宽侧廊包抄道）
-		Rect2(-1600.0, -764.0, 460.0, 48.0),
-		Rect2(1140.0, -764.0, 460.0, 48.0),
-		Rect2(-1600.0, 716.0, 460.0, 48.0),
-		Rect2(1140.0, 716.0, 460.0, 48.0),
+		# --- 1. 中央决斗场四面厚墙（每面仅留正中 1 个 164px 出入口：-82..+82）---
+		Rect2(-766.0, -766.0, 684.0, 52.0),
+		Rect2(82.0, -766.0, 684.0, 52.0),
+		Rect2(-766.0, 714.0, 684.0, 52.0),
+		Rect2(82.0, 714.0, 684.0, 52.0),
+		Rect2(-766.0, -714.0, 52.0, 632.0),
+		Rect2(-766.0, 82.0, 52.0, 632.0),
+		Rect2(714.0, -714.0, 52.0, 632.0),
+		Rect2(714.0, 82.0, 52.0, 632.0),
 
-		# --- 中央决斗场薄墙掩体（4 组对称 L 型薄墙，留足拉扯与卡视野空间）---
-		Rect2(-485.0, -295.0, 160.0, 22.0),
-		Rect2(-485.0, -295.0, 22.0, 145.0),
-		Rect2(325.0, -295.0, 160.0, 22.0),
-		Rect2(463.0, -295.0, 22.0, 145.0),
-		Rect2(-485.0, 273.0, 160.0, 22.0),
-		Rect2(-485.0, 150.0, 22.0, 145.0),
-		Rect2(325.0, 273.0, 160.0, 22.0),
-		Rect2(463.0, 150.0, 22.0, 145.0),
+		# --- 2. 四角符文房厚墙分割（纵向全封闭 + 横向各留唯一 1 个 164px 出入口通往东/西房间）---
+		# 四个纵向全封厚墙（隔开南北房间与四角符文房）
+		Rect2(-766.0, -1600.0, 52.0, 834.0),
+		Rect2(714.0, -1600.0, 52.0, 834.0),
+		Rect2(-766.0, 766.0, 52.0, 834.0),
+		Rect2(714.0, 766.0, 52.0, 834.0),
+		# 西北角南墙（唯一出入口 x = -1262..-1098，宽 164px）
+		Rect2(-1600.0, -766.0, 338.0, 52.0),
+		Rect2(-1098.0, -766.0, 332.0, 52.0),
+		# 东北角南墙（唯一出入口 x = 1098..1262，宽 164px）
+		Rect2(766.0, -766.0, 332.0, 52.0),
+		Rect2(1262.0, -766.0, 338.0, 52.0),
+		# 西南角北墙（唯一出入口 x = -1262..-1098，宽 164px）
+		Rect2(-1600.0, 714.0, 338.0, 52.0),
+		Rect2(-1098.0, 714.0, 332.0, 52.0),
+		# 东南角北墙（唯一出入口 x = 1098..1262，宽 164px）
+		Rect2(766.0, 714.0, 332.0, 52.0),
+		Rect2(1262.0, 714.0, 338.0, 52.0),
 
-		# --- 北·算力超频室薄墙掩体 ---
-		Rect2(-490.0, -1045.0, 165.0, 22.0),
-		Rect2(325.0, -1045.0, 165.0, 22.0),
-		Rect2(-95.0, -1350.0, 190.0, 22.0),
+		# --- 3. 中央决斗场加长薄墙掩体（4 组加长 L 墙 + 4 道入口错位挡板薄墙）---
+		Rect2(-515.0, -330.0, 235.0, 22.0),
+		Rect2(-515.0, -330.0, 22.0, 205.0),
+		Rect2(280.0, -330.0, 235.0, 22.0),
+		Rect2(493.0, -330.0, 22.0, 205.0),
+		Rect2(-515.0, 308.0, 235.0, 22.0),
+		Rect2(-515.0, 125.0, 22.0, 205.0),
+		Rect2(280.0, 308.0, 235.0, 22.0),
+		Rect2(493.0, 125.0, 22.0, 205.0),
+		Rect2(-110.0, -540.0, 220.0, 22.0),
+		Rect2(-110.0, 518.0, 220.0, 22.0),
+		Rect2(-540.0, -110.0, 22.0, 220.0),
+		Rect2(518.0, -110.0, 22.0, 220.0),
 
-		# --- 南·数据缓修站薄墙（方便卡视野脱战 3 秒触发缓回）---
-		Rect2(-470.0, 1040.0, 160.0, 22.0),
-		Rect2(310.0, 1040.0, 160.0, 22.0),
-		Rect2(-90.0, 1340.0, 180.0, 22.0),
+		# --- 4. 北·算力超频室加长薄墙矩阵（6 面长薄墙）---
+		Rect2(-540.0, -980.0, 260.0, 22.0),
+		Rect2(280.0, -980.0, 260.0, 22.0),
+		Rect2(-145.0, -1385.0, 290.0, 22.0),
+		Rect2(-120.0, -1165.0, 240.0, 22.0),
+		Rect2(-440.0, -1420.0, 22.0, 235.0),
+		Rect2(418.0, -1420.0, 22.0, 235.0),
 
-		# --- 西·极速风道薄墙导流障 ---
-		Rect2(-1190.0, -540.0, 22.0, 175.0),
-		Rect2(-1190.0, 365.0, 22.0, 175.0),
+		# --- 5. 南·数据缓修站加长薄墙矩阵（6 面长薄墙）---
+		Rect2(-540.0, 958.0, 260.0, 22.0),
+		Rect2(280.0, 958.0, 260.0, 22.0),
+		Rect2(-145.0, 1363.0, 290.0, 22.0),
+		Rect2(-120.0, 1143.0, 240.0, 22.0),
+		Rect2(-440.0, 1185.0, 22.0, 235.0),
+		Rect2(418.0, 1185.0, 22.0, 235.0),
 
-		# --- 东·脏数据野区薄墙掩体 ---
-		Rect2(1045.0, -510.0, 22.0, 165.0),
-		Rect2(1045.0, 345.0, 22.0, 165.0),
-		Rect2(1265.0, -11.0, 165.0, 22.0),
+		# --- 6. 西·极速风道加长薄墙导流障（避开 4 条锯刃导轨）---
+		Rect2(-1190.0, -615.0, 22.0, 260.0),
+		Rect2(-1190.0, 355.0, 22.0, 260.0),
+		Rect2(-1485.0, -535.0, 220.0, 22.0),
+		Rect2(-1485.0, 513.0, 220.0, 22.0),
+
+		# --- 7. 东·脏数据野区加长薄墙掩体（6 面长薄墙）---
+		Rect2(995.0, -585.0, 22.0, 260.0),
+		Rect2(995.0, 325.0, 22.0, 260.0),
+		Rect2(1370.0, -520.0, 22.0, 255.0),
+		Rect2(1370.0, 265.0, 22.0, 255.0),
+		Rect2(1075.0, -155.0, 245.0, 22.0),
+		Rect2(1075.0, 133.0, 245.0, 22.0),
+
+		# --- 8. 四角符文房内薄墙掩体（每角 2 面长薄墙护卫祭坛）---
+		Rect2(-1470.0, -995.0, 235.0, 22.0),
+		Rect2(-965.0, -1425.0, 22.0, 235.0),
+		Rect2(1235.0, -995.0, 235.0, 22.0),
+		Rect2(943.0, -1425.0, 22.0, 235.0),
+		Rect2(-1470.0, 973.0, 235.0, 22.0),
+		Rect2(-965.0, 1190.0, 22.0, 235.0),
+		Rect2(1235.0, 973.0, 235.0, 22.0),
+		Rect2(943.0, 1190.0, 22.0, 235.0),
 	]
 	# 精炼战术像素晶碑（保留四角开阔地带作为「四角增益符文祭坛」）
 	var pillars := [
@@ -556,7 +596,7 @@ func _update_pvp_runes(delta: float) -> void:
 				var rcol: Color = rdef["color"]
 				shrine["kind"] = ""
 				shrine["cd"] = RUNE_RESPAWN
-				a.score += 20
+				a.add_kill_score(20)
 				spawn_burst(spos, rcol, 62.0)
 				spawn_text(a.position + Vector2(0, -a.radius - 38), "符文【%s】15s！" % rdef["name"], rcol, 20)
 				if a == player:
@@ -736,7 +776,7 @@ func _damage_mid_boss(dmg: float, is_crit: bool, attacker: Archer, kb: Vector2, 
 	if attacker != null and is_instance_valid(attacker) and attacker.alive:
 		var ls := attacker.effective_lifesteal()
 		if ls > 0.0:
-			attacker.hp = minf(attacker.max_hp, attacker.hp + dmg * ls)
+			attacker.heal_hp(dmg * ls)
 	if attacker == player:
 		Sfx.play("crit" if is_crit else "hit", 0.08, 45, -10.0)
 	if float(mid_boss["hp"]) <= 0.0:
@@ -748,9 +788,7 @@ func _damage_mid_boss(dmg: float, is_crit: bool, attacker: Archer, kb: Vector2, 
 		add_shake(7.5)
 		if attacker != null and is_instance_valid(attacker) and attacker.alive:
 			attacker.apply_mid_boss_blessing()
-			attacker.score += 250
-			if attacker.team_id > 0:
-				team_scores[attacker.team_id] = int(team_scores.get(attacker.team_id, 0)) + 250
+			attacker.add_kill_score(250)
 			broadcast_banner("★ %s 斩杀中央 Mid Boss！获 30 秒全 6 增益 + 1 次复活！" % attacker.display_name, Color("#ffd84a"))
 			broadcast_feed("★ %s 斩杀 Mid Boss（30s 全增益 + 复活甲）" % attacker.display_name)
 			if not attacker.is_human():
@@ -801,7 +839,7 @@ func _damage_pvp_creep(idx: int, dmg: float, is_crit: bool, attacker: Archer, kb
 	if attacker != null and is_instance_valid(attacker) and attacker.alive:
 		var ls := attacker.effective_lifesteal()
 		if ls > 0.0:
-			attacker.hp = minf(attacker.max_hp, attacker.hp + dmg * ls)
+			attacker.heal_hp(dmg * ls)
 	if attacker == player:
 		Sfx.play("crit" if is_crit else "hit", 0.08, 45, -11.0)
 	if float(c["hp"]) <= 0.0:
@@ -811,9 +849,7 @@ func _damage_pvp_creep(idx: int, dmg: float, is_crit: bool, attacker: Archer, kb
 		if attacker == player:
 			Sfx.play("kill", 0.06, 60, -8.0)
 		if attacker != null and is_instance_valid(attacker):
-			attacker.score += 45 if is_tank else 22
-			if attacker.team_id > 0:
-				team_scores[attacker.team_id] = int(team_scores.get(attacker.team_id, 0)) + (30 if is_tank else 15)
+			attacker.add_kill_score(45 if is_tank else 22)
 		# 清剿野怪必爆高阶金/紫 Token + 回血血药！
 		var tok_cnt := 5 if is_tank else 3
 		for ti in tok_cnt:
@@ -917,12 +953,13 @@ func _spawn_pos_for(team: int, idx := 0) -> Vector2:
 	if game_mode == "survivor":
 		return Vector2(-70.0 + idx * 140.0, 0.0) if is_coop else Vector2.ZERO
 	if pvp_variant == "2v2v2v2" and team >= 1 and team <= 4:
-		var bases := [Vector2.ZERO, Vector2(0, -1160), Vector2(0, 1160), Vector2(-1160, 0), Vector2(1160, 0)]
+		var bases := [Vector2.ZERO, Vector2(0, -1260), Vector2(0, 1260), Vector2(-1180, 0), Vector2(1180, 0)]
 		var b: Vector2 = bases[team]
-		var jitter := Vector2(randf_range(-140.0, 140.0), randf_range(-120.0, 120.0))
-		var p := (b + jitter).clamp(Vector2(-ARENA_HALF + 120, -ARENA_HALF + 120), Vector2(ARENA_HALF - 120, ARENA_HALF - 120))
-		if not point_in_rock(p, 40.0) and not point_in_wall(p, 40.0):
-			return p
+		for _try in 24:
+			var jitter := Vector2(randf_range(-210.0, 210.0), randf_range(-160.0, 160.0))
+			var p := (b + jitter).clamp(Vector2(-ARENA_HALF + 120, -ARENA_HALF + 120), Vector2(ARENA_HALF - 120, ARENA_HALF - 120))
+			if not point_in_rock(p, 42.0) and not point_in_wall(p, 42.0):
+				return p
 	return random_free_point(120.0, true)
 
 
@@ -1429,6 +1466,7 @@ func _net_host_tick(delta: float) -> void:
 				a.level, a.score, a.kills, a.tokens, a.alive, a.downed,
 				a.revive_prog, a.auto_revive_t, a.active_cd, a.evolved_weapon, a.room_buff, a.phase_wall, a.wall_pierce,
 				a.temp_hp, a.max_temp_hp, a.revive_charges, a.rune_timers.duplicate(),
+				a.kill_score, a.respawn_timer, a.antiheal_timer, a.antiheal_ratio,
 			])
 		var snap := {
 			"tl": time_left, "ss": survived_sec, "a": a_arr, "ts": team_scores.duplicate(),
@@ -1547,6 +1585,9 @@ func _on_net_snapshot(snap: Dictionary) -> void:
 		if r.size() > 27:
 			a.temp_hp = float(r[24]); a.max_temp_hp = float(r[25]); a.revive_charges = int(r[26])
 			a.rune_timers = (r[27] as Dictionary).duplicate() if (r[27] is Dictionary) else {}
+		if r.size() > 31:
+			a.kill_score = int(r[28]); a.respawn_timer = float(r[29])
+			a.antiheal_timer = float(r[30]); a.antiheal_ratio = float(r[31])
 		a.radius = Archer.BASE_RADIUS * minf(1.0 + (a.level - 1) * 0.024, 1.42)
 
 	for i in range(archers.size() - 1, -1, -1):
@@ -1629,8 +1670,6 @@ func _on_archer_died(victim: Archer, killer: Archer) -> void:
 			var p := victim.position + Vector2.from_angle(randf() * TAU) * randf_range(10.0, 65.0)
 			spawn_orb(p, 10 if randf() < 0.6 else 15)
 		spawn_heart(victim.position + Vector2(randf_range(-18, 18), randf_range(-18, 18)))
-		if killer != null and killer.team_id > 0:
-			team_scores[killer.team_id] = int(team_scores.get(killer.team_id, 0)) + 100
 
 	var killer_name := killer.display_name if killer != null else ("算力怪潮" if game_mode == "survivor" else "算力坍缩圈")
 	broadcast_feed("%s 击败了 %s" % [killer_name, victim.display_name])
@@ -1639,21 +1678,18 @@ func _on_archer_died(victim: Archer, killer: Archer) -> void:
 		if not kems.is_empty():
 			broadcast_emote(killer.net_id, str(kems.pick_random()["text"]))
 
-	# 联机 PVP：真人玩家死亡 3 秒后复活继续参战，直至时间结束决胜负！
-	if net_role == "host" and game_mode == "pvp" and victim.is_human():
+	# PVP 统一规则（单人与联机、玩家与 AI 人机一视同仁）：死亡后 3 秒复活且等级减半，保留击杀分，时间结束看总分结算！
+	if game_mode == "pvp":
 		victim.visible = false
-		get_tree().create_timer(3.0, false).timeout.connect(func() -> void:
-			if game_over or not is_instance_valid(victim):
-				return
-			victim.alive = true
-			victim.downed = false
-			victim.hp = victim.max_hp
-			victim.shield = victim.max_shield
-			victim.invuln = 2.6
-			victim.position = _spawn_pos_for(victim.team_id)
-			victim.visible = true
-			spawn_burst(victim.position, victim.accent_color, 52.0)
-		)
+		victim.respawn_timer = 3.0
+		var next_lv := maxi(1, int(victim.level / 2))
+		if victim == player:
+			pending_picks = 0
+			if hud != null:
+				hud.hide_skill_pick()
+			if net_role == "offline" and not game_over:
+				get_tree().paused = false
+			broadcast_banner("💀 被 %s 击败！3 秒后复活（等级减半 Lv%d → Lv%d，保留击杀分）" % [killer_name, victim.level, next_lv], Color("#ff6b8b"))
 		return
 
 	# PVE 双人合作：只有全队都倒下才团灭！
@@ -1688,7 +1724,7 @@ func end_match(reason: String, victory := false, from_net := false) -> void:
 	for a in archers:
 		if a != player and a.score > player.score:
 			rank += 1
-	var total := archers.size() + (0 if (player != null and player.alive) else 1)
+	var total := archers.size() if (player != null and archers.has(player)) else (archers.size() + 1)
 	var k_cnt := swarm.monster_kills if (game_mode == "survivor" and swarm != null) else (player.kills if player != null else 0)
 	var p_tok := player.tokens if player != null else 0
 	var cp_info := MetaSave.record_match_result(game_mode, difficulty_id, k_cnt, p_tok, survived_sec, victory, not autotest)
@@ -1828,8 +1864,6 @@ func ranking() -> Array[Archer]:
 
 func team_ranking() -> Array[Dictionary]:
 	var totals := {1: 0, 2: 0, 3: 0, 4: 0}
-	for tid in [1, 2, 3, 4]:
-		totals[tid] = int(team_scores.get(tid, 0))
 	for a in archers:
 		if a.team_id >= 1 and a.team_id <= 4:
 			totals[a.team_id] = int(totals[a.team_id]) + a.score
@@ -1879,11 +1913,80 @@ func point_in_rock(p: Vector2, pad: float) -> bool:
 	return false
 
 
+func is_thin_wall(w: Rect2) -> bool:
+	return minf(w.size.x, w.size.y) < 36.0
+
+
 func point_in_wall(p: Vector2, pad := 0.0) -> bool:
 	for w in walls:
 		if w.grow(pad).has_point(p):
 			return true
 	return false
+
+
+func point_in_thick_wall(p: Vector2, pad := 0.0) -> bool:
+	for w in walls:
+		if not is_thin_wall(w) and w.grow(pad).has_point(p):
+			return true
+	return false
+
+
+func point_in_thin_wall(p: Vector2, pad := 0.0) -> bool:
+	for w in walls:
+		if is_thin_wall(w) and w.grow(pad).has_point(p):
+			return true
+	return false
+
+
+func _region_of(p: Vector2) -> String:
+	if absf(p.x) <= 740.0 and absf(p.y) <= 740.0:
+		return "center"
+	if p.x < -740.0 and p.y < -740.0:
+		return "nw"
+	if p.x > 740.0 and p.y < -740.0:
+		return "ne"
+	if p.x < -740.0 and p.y > 740.0:
+		return "sw"
+	if p.x > 740.0 and p.y > 740.0:
+		return "se"
+	if p.y < -740.0:
+		return "north"
+	if p.y > 740.0:
+		return "south"
+	if p.x < -740.0:
+		return "west"
+	return "east"
+
+
+## 区域分割为厚墙单出入口：帮 AI 跨区时先精确对准唯一 164px 出入口再直奔目标！
+func doorway_waypoint(from: Vector2, to: Vector2) -> Vector2:
+	if game_mode != "pvp":
+		return to
+	var r_from := _region_of(from)
+	var r_to := _region_of(to)
+	if r_from == r_to:
+		return to
+	match r_from:
+		"nw": return Vector2(-1180.0, -740.0)
+		"ne": return Vector2(1180.0, -740.0)
+		"sw": return Vector2(-1180.0, 740.0)
+		"se": return Vector2(1180.0, 740.0)
+		"north": return Vector2(0.0, -740.0)
+		"south": return Vector2(0.0, 740.0)
+		"west":
+			if r_to == "nw": return Vector2(-1180.0, -740.0)
+			if r_to == "sw": return Vector2(-1180.0, 740.0)
+			return Vector2(-740.0, 0.0)
+		"east":
+			if r_to == "ne": return Vector2(1180.0, -740.0)
+			if r_to == "se": return Vector2(1180.0, 740.0)
+			return Vector2(740.0, 0.0)
+		"center":
+			if r_to == "north": return Vector2(0.0, -740.0)
+			if r_to == "south": return Vector2(0.0, 740.0)
+			if r_to == "west" or r_to == "nw" or r_to == "sw": return Vector2(-740.0, 0.0)
+			return Vector2(740.0, 0.0)
+	return to
 
 
 func bounce_normal_at(p: Vector2) -> Vector2:
@@ -1917,11 +2020,10 @@ func bounce_normal_at(p: Vector2) -> Vector2:
 func resolve_position(a: Archer) -> void:
 	var lim := ARENA_HALF - a.radius
 	a.position = a.position.clamp(Vector2(-lim, -lim), Vector2(lim, lim))
-	# 「量子穿墙」加成：角色可直接穿过场内所有墙壁与障碍物（依然受限于外圈场地边界）！
-	if a.phase_wall:
-		return
-	# 1. 圆 vs 矩形墙壁平滑滑动碰撞
+	# 1. 圆 vs 矩形墙壁平滑滑动碰撞：「量子穿墙」仅可穿过区域内薄墙，区域分割厚墙始终不可穿！
 	for w in walls:
+		if a.phase_wall and is_thin_wall(w):
+			continue
 		var cx := clampf(a.position.x, w.position.x, w.end.x)
 		var cy := clampf(a.position.y, w.position.y, w.end.y)
 		var closest := Vector2(cx, cy)
@@ -1933,7 +2035,9 @@ func resolve_position(a: Archer) -> void:
 			else:
 				var n := bounce_normal_at(a.position)
 				a.position += n * a.radius
-	# 2. 圆 vs 圆形像素障碍物碰撞
+	# 2. 圆 vs 圆形像素障碍物碰撞（幸存者模式无薄墙时量子穿墙允许穿晶石，PVP 中晶柱视为实体厚障）
+	if a.phase_wall and game_mode == "survivor":
+		return
 	for r in rocks:
 		var c := Vector2(r.x, r.y)
 		var d := a.position - c
