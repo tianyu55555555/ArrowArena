@@ -9,6 +9,7 @@ var move_joy_vec := Vector2.ZERO
 var aim_joy_vec := Vector2.ZERO
 var aim_joy_active := false
 var mouse_fire_held := false
+var is_touch_ui := false
 
 var overlay: Control
 var fx_overlay: Control
@@ -37,6 +38,7 @@ var pause_restart_btn: Button
 var pause_bgm_btn: Button
 var pause_sfx_btn: Button
 var active_btn: Button
+var active_btn_title: Label
 var active_btn_sub: Label
 var mute_btn: Button
 var bgm_btn: Button
@@ -63,6 +65,7 @@ var _aim_joy_knob := Vector2.ZERO
 
 func _ready() -> void:
 	process_mode = Node.PROCESS_MODE_ALWAYS
+	is_touch_ui = OS.get_name() == "Android" or OS.get_name() == "iOS" or DisplayServer.is_touchscreen_available() or (game != null and game.demo_touch)
 	var cd := Characters.get_data(game.player_char_id)
 	_avatar_tex = load(str(cd["avatar"])) as Texture2D
 
@@ -101,10 +104,17 @@ func _build_corner_controls(root: Control) -> void:
 	active_btn.anchor_right = 1.0
 	active_btn.anchor_top = 1.0
 	active_btn.anchor_bottom = 1.0
-	active_btn.offset_left = -216
-	active_btn.offset_right = -24
-	active_btn.offset_top = -104
-	active_btn.offset_bottom = -24
+	if is_touch_ui:
+		# 触屏布局：把右下角完整留给独立右瞄准摇杆（不挡视野！），大招放在右摇杆左上侧一键拇指直达
+		active_btn.offset_left = -336
+		active_btn.offset_right = -224
+		active_btn.offset_top = -176
+		active_btn.offset_bottom = -96
+	else:
+		active_btn.offset_left = -216
+		active_btn.offset_right = -24
+		active_btn.offset_top = -104
+		active_btn.offset_bottom = -24
 	active_btn.focus_mode = Control.FOCUS_NONE
 	active_btn.pressed.connect(func() -> void:
 		if not get_tree().paused and game.player != null and game.player.alive and not game.player.downed:
@@ -127,13 +137,13 @@ func _build_corner_controls(root: Control) -> void:
 	vb.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	active_btn.add_child(vb)
 
-	var nl := Label.new()
-	nl.text = "[Space/右键] %s" % cd["active_name"]
-	nl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	nl.add_theme_font_size_override("font_size", 15)
-	nl.add_theme_color_override("font_color", Color.WHITE)
-	nl.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	vb.add_child(nl)
+	active_btn_title = Label.new()
+	active_btn_title.text = "[Space/右键] %s" % cd["active_name"]
+	active_btn_title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	active_btn_title.add_theme_font_size_override("font_size", 15)
+	active_btn_title.add_theme_color_override("font_color", Color.WHITE)
+	active_btn_title.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	vb.add_child(active_btn_title)
 
 	active_btn_sub = Label.new()
 	active_btn_sub.text = "已就绪！"
@@ -197,12 +207,18 @@ func _build_corner_controls(root: Control) -> void:
 		)
 		root.add_child(auto_btn)
 
-	# 左下角：战内快捷热梗表情 / 语音气泡条（按 1/2/3/4 或 T 发送，支持局域网同步！）
+	# 左下角（触屏移至底部居中，避开左右双摇杆）：战内快捷热梗表情 / 语音气泡条
 	emote_bar = HBoxContainer.new()
-	emote_bar.anchor_left = 0.0; emote_bar.anchor_right = 0.0
-	emote_bar.anchor_top = 1.0; emote_bar.anchor_bottom = 1.0
-	emote_bar.offset_left = 16; emote_bar.offset_right = 450
-	emote_bar.offset_top = -68; emote_bar.offset_bottom = -38
+	if is_touch_ui:
+		emote_bar.anchor_left = 0.5; emote_bar.anchor_right = 0.5
+		emote_bar.anchor_top = 1.0; emote_bar.anchor_bottom = 1.0
+		emote_bar.offset_left = -196; emote_bar.offset_right = 196
+		emote_bar.offset_top = -62; emote_bar.offset_bottom = -32
+	else:
+		emote_bar.anchor_left = 0.0; emote_bar.anchor_right = 0.0
+		emote_bar.anchor_top = 1.0; emote_bar.anchor_bottom = 1.0
+		emote_bar.offset_left = 16; emote_bar.offset_right = 450
+		emote_bar.offset_top = -68; emote_bar.offset_bottom = -38
 	emote_bar.add_theme_constant_override("separation", 6)
 	var ems := Archer.get_emotes_for(game.player_char_id)
 	var acc_col: Color = cd["accent"]
@@ -227,6 +243,33 @@ func _build_corner_controls(root: Control) -> void:
 		)
 		emote_bar.add_child(eb)
 	root.add_child(emote_bar)
+	if is_touch_ui:
+		_apply_touch_layout()
+
+
+func _apply_touch_layout() -> void:
+	var cd := Characters.get_data(game.player_char_id)
+	# 大招放在右瞄准摇杆左上方，绝不遮挡右摇杆且拇指易点
+	active_btn.offset_left = -362; active_btn.offset_right = -218
+	active_btn.offset_top = -170; active_btn.offset_bottom = -94
+	if active_btn_title != null:
+		active_btn_title.text = "[大招] %s" % cd["active_name"]
+		active_btn_title.add_theme_font_size_override("font_size", 14)
+	# 工具小按钮移至右上小地图正左侧，彻底腾空右下独立瞄准区！
+	pause_btn.anchor_top = 0.0; pause_btn.anchor_bottom = 0.0
+	pause_btn.offset_left = -264; pause_btn.offset_right = -174; pause_btn.offset_top = 202; pause_btn.offset_bottom = 230
+	bgm_btn.anchor_top = 0.0; bgm_btn.anchor_bottom = 0.0
+	bgm_btn.offset_left = -264; bgm_btn.offset_right = -174; bgm_btn.offset_top = 238; bgm_btn.offset_bottom = 266
+	mute_btn.anchor_top = 0.0; mute_btn.anchor_bottom = 0.0
+	mute_btn.offset_left = -264; mute_btn.offset_right = -174; mute_btn.offset_top = 274; mute_btn.offset_bottom = 302
+	if auto_btn != null:
+		auto_btn.anchor_top = 0.0; auto_btn.anchor_bottom = 0.0
+		auto_btn.offset_left = -264; auto_btn.offset_right = -174; auto_btn.offset_top = 310; auto_btn.offset_bottom = 338
+	if emote_bar != null:
+		emote_bar.anchor_left = 0.5; emote_bar.anchor_right = 0.5
+		emote_bar.anchor_top = 1.0; emote_bar.anchor_bottom = 1.0
+		emote_bar.offset_left = -196; emote_bar.offset_right = 196
+		emote_bar.offset_top = -62; emote_bar.offset_bottom = -32
 
 
 func _panel_style(border_col: Color) -> StyleBoxFlat:
@@ -966,6 +1009,9 @@ func _input(event: InputEvent) -> void:
 
 	if event is InputEventScreenTouch:
 		var t := event as InputEventScreenTouch
+		if not is_touch_ui:
+			is_touch_ui = true
+			_apply_touch_layout()
 		var half_x := overlay.size.x * 0.5
 		if t.pressed:
 			if active_btn.get_global_rect().has_point(t.position) or mute_btn.get_global_rect().has_point(t.position) or bgm_btn.get_global_rect().has_point(t.position) or pause_btn.get_global_rect().has_point(t.position):
@@ -976,14 +1022,17 @@ func _input(event: InputEvent) -> void:
 				return
 			if t.position.x < half_x and _move_joy_idx == -1:
 				_move_joy_idx = t.index
-				_move_joy_center = t.position
+				var rest_l := Vector2(126.0, overlay.size.y - 138.0)
+				_move_joy_center = rest_l if t.position.distance_to(rest_l) < 105.0 else t.position
 				_move_joy_knob = t.position
 			elif t.position.x >= half_x and _aim_joy_idx == -1:
 				_aim_joy_idx = t.index
-				_aim_joy_center = t.position
-				_aim_joy_knob = t.position
+				var rest_r := Vector2(overlay.size.x - 126.0, overlay.size.y - 138.0)
+				_aim_joy_center = rest_r if t.position.distance_to(rest_r) < 110.0 else t.position
+				var init_off := (t.position - _aim_joy_center).limit_length(JOY_R)
+				_aim_joy_knob = _aim_joy_center + init_off
 				aim_joy_active = true
-				aim_joy_vec = Vector2.ZERO
+				aim_joy_vec = (init_off / JOY_R) if init_off.length() > 10.0 else Vector2.ZERO
 		else:
 			if t.index == _move_joy_idx:
 				_move_joy_idx = -1
@@ -1159,8 +1208,9 @@ func _draw_overlay() -> void:
 		_text(overlay, Vector2(0, 68), "[%s] %s   ·   消灭 %d" % ["双人无尽" if game.is_coop else dd["name"], game.swarm.wave_title(), game.swarm.monster_kills], 16, Color(1.0, 0.86, 0.48), HORIZONTAL_ALIGNMENT_CENTER, vs.x)
 		var boss := game.swarm.active_boss()
 		if not boss.is_empty():
-			var bname := "终极过拟合魔王" if bool(boss["is_final"]) else "过拟合巨像"
-			_bar(Vector2(vs.x * 0.5 - 190, 82), Vector2(380, 20), float(boss["hp"]) / float(boss["max_hp"]), Color("#d93258"), "%s  %d / %d" % [bname, int(boss["hp"]), int(boss["max_hp"])])
+			var bname := str(boss.get("boss_name", "终极过拟合魔王" if bool(boss["is_final"]) else "过拟合巨像"))
+			var bcol: Color = boss.get("boss_col", Color("#d93258"))
+			_bar(Vector2(vs.x * 0.5 - 210, 82), Vector2(420, 22), float(boss["hp"]) / float(boss["max_hp"]), bcol, "★ %s  %d / %d" % [bname, int(boss["hp"]), int(boss["max_hp"])], 14)
 	else:
 		var tl := int(ceil(game.time_left))
 		_text(overlay, Vector2(0, 38), "%d:%02d" % [tl / 60, tl % 60], 30, Color.WHITE if tl > 30 else Color(1, 0.4, 0.3), HORIZONTAL_ALIGNMENT_CENTER, vs.x)
@@ -1287,6 +1337,9 @@ func _draw_overlay() -> void:
 		var mp := mm.position + (a.position + Vector2.ONE * Game.ARENA_HALF) * k
 		var dcol: Color = Color(1, 0.95, 0.4) if a == p else (NetManager.TEAM_COLORS[clampi(a.team_id, 0, 4)] if (a.team_id > 0 and game.game_mode == "pvp") else a.color)
 		overlay.draw_circle(mp, 5.0 if a == p else 3.2, dcol)
+		if a == p and p.locate_timer > 0.0:
+			var pulse_mm := fposmod(p.anim_t * 2.0, 1.0)
+			overlay.draw_arc(mp, 6.0 + pulse_mm * 16.0, 0.0, TAU, 20, Color(1.0, 0.94, 0.32, 1.0 - pulse_mm), 2.2)
 
 	for i in feed.size():
 		var f := feed[i]
@@ -1302,30 +1355,44 @@ func _draw_overlay() -> void:
 
 	if hint_time > 0.0:
 		var c := Color(1, 1, 1, clampf(hint_time, 0.0, 1.0))
-		var is_touch := OS.get_name() == "Android" or OS.get_name() == "iOS" or DisplayServer.is_touchscreen_available()
 		var htxt := ""
-		if is_touch:
-			htxt = ("左半屏滑屏移动 · 右半屏滑屏随时手动瞄准（已开辅助自动火） · 右下大招 · 左下热梗气泡"
+		if is_touch_ui:
+			htxt = ("左下摇杆移动 · 右下独立摇杆随时手动瞄准（不挡人物视野！已开自动火） · 大招在右摇杆左上方"
 				if game.game_mode == "survivor"
-				else "左半屏滑屏移动 · 右半屏滑向哪往哪射（可边走边打！） · 右下角大招 · 左下热梗气泡")
+				else "左下摇杆移动 · 右下独立摇杆瞄准开火（完全脱离角色中心，绝不挡视野！） · 大招在右摇杆左上方")
 		else:
 			htxt = ("WASD/左摇杆走位 · 辅助自动开火（左键/右摇杆可手动） · 空格/右键大招 · [1-4/T] 热梗气泡"
 				if game.game_mode == "survivor"
 				else "WASD/左摇杆移动 · 左键/右摇杆瞄准开火 · 空格/右键放技能 · [1-4/T] 发战内热梗气泡")
 		_text(overlay, Vector2(0, vs.y - 16), htxt, 14, c, HORIZONTAL_ALIGNMENT_CENTER, vs.x)
 
+	# 触屏设备：常驻显示半透明「左下移动摇杆」与「右下独立瞄准摇杆」（完全脱离角色中心，绝不挡视野！）
+	if is_touch_ui and _move_joy_idx == -1:
+		var rl := Vector2(126.0, vs.y - 138.0)
+		overlay.draw_circle(rl, JOY_R, Color(0.4, 0.78, 1.0, 0.10))
+		overlay.draw_arc(rl, JOY_R, 0.0, TAU, 32, Color(0.48, 0.86, 1.0, 0.36), 2.5)
+		overlay.draw_circle(rl, 22.0, Color(0.65, 0.92, 1.0, 0.30))
+		_text(overlay, rl + Vector2(-60, JOY_R + 18), "左下·移动", 13, Color(0.75, 0.94, 1.0, 0.72), HORIZONTAL_ALIGNMENT_CENTER, 120)
+
+	if is_touch_ui and _aim_joy_idx == -1:
+		var rr := Vector2(vs.x - 126.0, vs.y - 138.0)
+		overlay.draw_circle(rr, JOY_R, Color(1.0, 0.66, 0.24, 0.11))
+		overlay.draw_arc(rr, JOY_R, 0.0, TAU, 32, Color(1.0, 0.78, 0.36, 0.42), 2.5)
+		overlay.draw_circle(rr, 22.0, Color(1.0, 0.82, 0.42, 0.34))
+		_text(overlay, rr + Vector2(-72, JOY_R + 18), "右下·拖动瞄准", 13, Color(1.0, 0.90, 0.62, 0.80), HORIZONTAL_ALIGNMENT_CENTER, 144)
+
 	if _move_joy_idx != -1:
-		overlay.draw_circle(_move_joy_center, JOY_R, Color(0.4, 0.75, 1.0, 0.15))
-		overlay.draw_arc(_move_joy_center, JOY_R, 0.0, TAU, 36, Color(0.5, 0.85, 1.0, 0.5), 3.0)
-		overlay.draw_circle(_move_joy_knob, 28.0, Color(0.65, 0.9, 1.0, 0.55))
+		overlay.draw_circle(_move_joy_center, JOY_R, Color(0.4, 0.75, 1.0, 0.16))
+		overlay.draw_arc(_move_joy_center, JOY_R, 0.0, TAU, 36, Color(0.5, 0.85, 1.0, 0.60), 3.0)
+		overlay.draw_circle(_move_joy_knob, 28.0, Color(0.65, 0.9, 1.0, 0.62))
 
 	if _aim_joy_idx != -1:
-		overlay.draw_circle(_aim_joy_center, JOY_R, Color(1.0, 0.65, 0.25, 0.16))
-		overlay.draw_arc(_aim_joy_center, JOY_R, 0.0, TAU, 36, Color(1.0, 0.78, 0.35, 0.65), 3.0)
-		overlay.draw_circle(_aim_joy_knob, 28.0, Color(1.0, 0.82, 0.4, 0.65))
-		if aim_joy_vec.length() > 0.16:
+		overlay.draw_circle(_aim_joy_center, JOY_R, Color(1.0, 0.65, 0.25, 0.18))
+		overlay.draw_arc(_aim_joy_center, JOY_R, 0.0, TAU, 36, Color(1.0, 0.78, 0.35, 0.75), 3.2)
+		overlay.draw_circle(_aim_joy_knob, 28.0, Color(1.0, 0.82, 0.4, 0.72))
+		if aim_joy_vec.length() > 0.14:
 			var adir := aim_joy_vec.normalized()
-			overlay.draw_line(_aim_joy_center, _aim_joy_center + adir * (JOY_R + 18.0), Color(1, 0.9, 0.5, 0.85), 3.0)
+			overlay.draw_line(_aim_joy_center, _aim_joy_center + adir * (JOY_R + 18.0), Color(1, 0.92, 0.5, 0.92), 3.5)
 
 
 func _draw_fx_overlay() -> void:
@@ -1353,7 +1420,10 @@ func _draw_fx_overlay() -> void:
 	if banner_t > 0.0 and banner_text != "":
 		var a := clampf(banner_t * 1.4, 0.0, 1.0)
 		var vs := fx_overlay.size
-		var y := 124.0 - (1.0 - a) * 16.0
-		fx_overlay.draw_rect(Rect2(vs.x * 0.5 - 230, y - 26, 460, 38), Color(0.06, 0.08, 0.15, 0.82 * a))
-		fx_overlay.draw_rect(Rect2(vs.x * 0.5 - 230, y - 26, 460, 38), Color(banner_col.r, banner_col.g, banner_col.b, 0.92 * a), false, 2.0)
-		_text(fx_overlay, Vector2(0, y), banner_text, 21, Color(banner_col.r, banner_col.g, banner_col.b, a).lightened(0.25), HORIZONTAL_ALIGNMENT_CENTER, vs.x)
+		var y := 146.0 - (1.0 - a) * 14.0
+		var bfs := 18
+		var tw := PixelSprites.ui_font().get_string_size(banner_text, HORIZONTAL_ALIGNMENT_LEFT, -1, bfs).x
+		var bw := clampf(tw + 48.0, 380.0, vs.x - 140.0)
+		fx_overlay.draw_rect(Rect2(vs.x * 0.5 - bw * 0.5, y - 24, bw, 36), Color(0.06, 0.08, 0.15, 0.86 * a))
+		fx_overlay.draw_rect(Rect2(vs.x * 0.5 - bw * 0.5, y - 24, bw, 36), Color(banner_col.r, banner_col.g, banner_col.b, 0.92 * a), false, 2.0)
+		_text(fx_overlay, Vector2(0, y), banner_text, bfs, Color(banner_col.r, banner_col.g, banner_col.b, a).lightened(0.25), HORIZONTAL_ALIGNMENT_CENTER, vs.x)

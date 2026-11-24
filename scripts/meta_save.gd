@@ -48,6 +48,7 @@ static func _default_data() -> Dictionary:
 		"cleared_diffs": [],
 		"best_endless_sec": 0.0,
 		"best_endless_kills": 0,
+		"tutorial_seen": false,
 	}
 
 
@@ -127,6 +128,18 @@ static func reset_talents() -> int:
 static func is_codex_full_unlocked() -> bool:
 	ensure_loaded()
 	return bool(data["codex_full_unlocked"])
+
+
+static func is_tutorial_seen() -> bool:
+	ensure_loaded()
+	return bool(data.get("tutorial_seen", false))
+
+
+static func mark_tutorial_seen() -> void:
+	ensure_loaded()
+	if not bool(data.get("tutorial_seen", false)):
+		data["tutorial_seen"] = true
+		save_to_disk()
 
 
 static func unlock_full_codex() -> bool:

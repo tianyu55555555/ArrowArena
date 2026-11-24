@@ -17,6 +17,9 @@ var _demo_pause := false
 var _demo_midboss := false
 var _demo_blessing := false
 var _demo_storm := false
+var _demo_touch := false
+var _demo_pve_boss := ""
+var _demo_tutorial := false
 var _demo_talents := false
 var _demo_codex := false
 var _demo_lan := false
@@ -54,6 +57,8 @@ func _ready() -> void:
 			selected_diff = arg.substr(7)
 		elif arg.begins_with("--shot-lobby="):
 			_shot_mode = "lobby"; _shot_path = arg.substr(13)
+		elif arg.begins_with("--shot-tutorial="):
+			_shot_mode = "lobby"; _shot_path = arg.substr(16); _demo_tutorial = true
 		elif arg.begins_with("--shot-talents="):
 			_shot_mode = "lobby"; _shot_path = arg.substr(15); _demo_talents = true
 		elif arg.begins_with("--shot-codex="):
@@ -80,6 +85,10 @@ func _ready() -> void:
 			_demo_blessing = true
 		elif arg == "--demo-storm":
 			_demo_storm = true
+		elif arg == "--demo-touch":
+			_demo_touch = true
+		elif arg.begins_with("--demo-pve-boss="):
+			_demo_pve_boss = arg.substr(16)
 		elif arg.begins_with("--demo-pos="):
 			var parts := arg.substr(11).split(",")
 			if parts.size() == 2:
@@ -149,6 +158,7 @@ func _open_lobby(open_lan := false) -> void:
 	lb.open_talents_on_ready = _demo_talents
 	lb.open_codex_on_ready = _demo_codex
 	lb.open_lan_on_ready = open_lan
+	lb.open_tutorial_on_ready = _demo_tutorial
 	lb.start_battle.connect(_on_start_battle)
 	_swap(lb, true)
 
@@ -187,6 +197,8 @@ func _open_battle() -> void:
 	g.demo_midboss = _demo_midboss
 	g.demo_blessing = _demo_blessing
 	g.demo_storm = _demo_storm
+	g.demo_touch = _demo_touch
+	g.demo_pve_boss = _demo_pve_boss
 	if _override_time > 0.0:
 		g.override_time = _override_time
 	if _shot_mode == "play" or _shot_mode == "levelup" or _shot_mode == "pick":

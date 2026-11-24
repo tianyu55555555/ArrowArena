@@ -12,6 +12,7 @@ var selected_diff := "normal"
 var open_talents_on_ready := false
 var open_codex_on_ready := false
 var open_lan_on_ready := false
+var open_tutorial_on_ready := false
 
 var _bg: Control
 var _live2d: Live2dView
@@ -58,6 +59,8 @@ var _talent_modal: PanelContainer
 var _talent_cp_label: Label
 var _talent_stats_label: Label
 var _talent_cards: Dictionary = {}
+var _tutorial_modal: PanelContainer
+var _tut_toast: PanelContainer = null
 var _codex_unlock_btn: Button
 
 # 三标签科普图鉴馆弹窗（AI 模型档案 / AI 公益科普 / 怪物概念档案）
@@ -157,6 +160,16 @@ func _ready() -> void:
 		_open_talent_modal()
 	)
 	top_bar.add_child(_talent_top_btn)
+
+	var tut_btn := Button.new()
+	tut_btn.text = "操作教程"
+	tut_btn.custom_minimum_size = Vector2(94, 36)
+	tut_btn.focus_mode = Control.FOCUS_NONE
+	tut_btn.pressed.connect(func() -> void:
+		Sfx.play("ui_click")
+		_open_tutorial_modal()
+	)
+	top_bar.add_child(tut_btn)
 
 	var wiki_btn := Button.new()
 	wiki_btn.text = "科普图鉴馆"
@@ -549,6 +562,7 @@ func _ready() -> void:
 
 	_build_talent_modal()
 	_build_tips_modal()
+	_build_tutorial_modal()
 	_build_lan_modal()
 	_select_char(selected_char, false)
 	_refresh_meta_ui()
@@ -560,8 +574,12 @@ func _ready() -> void:
 		_open_talent_modal()
 	elif open_codex_on_ready:
 		_open_tips_modal()
+	elif open_tutorial_on_ready:
+		_open_tutorial_modal()
 	elif open_lan_on_ready or NetManager.is_online():
 		_open_lan_modal()
+	elif not MetaSave.is_tutorial_seen():
+		_show_tutorial_toast()
 
 
 func _section_header(text: String) -> Label:
@@ -1431,6 +1449,174 @@ func _refresh_lan_modal() -> void:
 func _input(event: InputEvent) -> void:
 	if OS.has_feature("web") and ((event is InputEventScreenTouch and (event as InputEventScreenTouch).pressed) or (event is InputEventMouseButton and (event as InputEventMouseButton).pressed)):
 		Sfx.unlock_web_audio()
+
+
+# ================= 不强制的新手教程弹窗 + 首次轻提示条 =================
+func _build_tutorial_modal() -> void:
+	_tutorial_modal = PanelContainer.new()
+	_tutorial_modal.set_anchors_preset(Control.PRESET_CENTER)
+	_tutorial_modal.offset_left = -460
+	_tutorial_modal.offset_right = 460
+	_tutorial_modal.offset_top = -275
+	_tutorial_modal.offset_bottom = 275
+	var sb := StyleBoxFlat.new()
+	sb.bg_color = Color(0.06, 0.08, 0.15, 0.97)
+	sb.set_corner_radius_all(18)
+	sb.set_content_margin_all(20)
+	sb.border_color = Color(0.38, 0.88, 1.0, 0.92)
+	sb.set_border_width_all(3)
+	_tutorial_modal.add_theme_stylebox_override("panel", sb)
+	_tutorial_modal.visible = false
+	add_child(_tutorial_modal)
+
+	var vb := VBoxContainer.new()
+	vb.add_theme_constant_override("separation", 12)
+	_tutorial_modal.add_child(vb)
+
+	var hdr := HBoxContainer.new()
+	vb.add_child(hdr)
+	var title := Label.new()
+	title.text = "快速上手指南（随时可跳过 · 不强制观看）"
+	title.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	title.add_theme_font_size_override("font_size", 22)
+	title.add_theme_color_override("font_color", Color(1.0, 0.92, 0.45))
+	hdr.add_child(title)
+	var close_b := Button.new()
+	close_b.text = "关闭 ×"
+	close_b.custom_minimum_size = Vector2(90, 34)
+	close_b.focus_mode = Control.FOCUS_NONE
+	close_b.pressed.connect(func() -> void:
+		Sfx.play("ui_click")
+		MetaSave.mark_tutorial_seen()
+		_tutorial_modal.visible = false
+	)
+	hdr.add_child(close_b)
+
+	var cards_row := HBoxContainer.new()
+	cards_row.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	cards_row.add_theme_constant_override("separation", 12)
+	vb.add_child(cards_row)
+
+	var sections := [
+		{
+			"title": "1. 双手操控（绝不挡视野！）",
+			"col": Color("#48dcff"),
+			"body": "【手机/iPad 触屏】\n· 左下角蓝色摇杆：滑动控制走位。\n· 右下角橙色摇杆：放在右下角原地拖动瞄准开火（以摇杆圆心转动，完全不会挡住屏幕中央的小人！）。\n· 大招按钮在右摇杆左上侧，拇指一抬即按。\n\n【电脑键鼠】\n· WASD 移动 + 鼠标指向按左键开火。\n· Space/右键放大招，1~4/T 发战内热梗气泡。\n\n【进局一眼找自己】\n· 开局与每次复活前 4 秒，小人头顶与小地图都会闪烁金色「你在这里！」雷达波。",
+		},
+		{
+			"title": "2. 五宫格 PVP 制胜秘诀",
+			"col": Color("#ffd84a"),
+			"body": "【打人收益 >> 刷野】\n· 击杀对手直得 +150 起悬赏分 + 大量直达经验 + 瞬间回血 25% + 减 CD + 3 秒提速！\n· 东边野怪仅提供少量补充 Token，正面抓人最赚。\n\n【复活与积分结算】\n· 阵亡不直接淘汰：3 秒后复活并掉一半等级，击杀分完整保留；倒计时结束按「总分 = 击杀分 + 等级分」排名。\n\n【地图与克制】\n· 区域之间为厚石墙（仅 1 个约 3 身位出入口）；穿墙词条只穿室内青钢薄墙。\n· 遇高回血对手可选「重伤断疗」最高抑制 75% 治疗！\n· 抢四角神符、中央 Mid Boss 与最后 60 秒缩圈决战。",
+		},
+		{
+			"title": "3. 算力潮汐 PVE 与技能 Boss",
+			"col": Color("#ff6896"),
+			"body": "【前期紧迫 → 5 分钟爽游起飞】\n· 前 4 分钟怪压紧凑、升级更有策略感；优先集齐 2 种 AI 支援副武触发 MoE 协同，Lv6 后合成专属神话超武，约 5 分钟起迎来满屏清怪爽感！\n\n【3 种不同技能 Boss】\n· 囚笼冲撞兽：框出红色能量囚笼无法逃离，并在圈内连续 3 次高速冲撞！\n· 发散弹幕魔：释放多波发散环形弹幕与旋转螺旋花瓣波。\n· 坍缩重炮王：在走位路径铺设延迟红圈轰炸阵 + 扇形齐射。\n\n· 击败 Boss 必掉黄金宝箱与 2 枚珍贵回血粉心！",
+		},
+	]
+	for sec in sections:
+		var pc := PanelContainer.new()
+		pc.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		var csb := StyleBoxFlat.new()
+		var sc: Color = sec["col"]
+		csb.bg_color = Color(0.10, 0.13, 0.22, 0.96)
+		csb.set_corner_radius_all(12)
+		csb.set_content_margin_all(14)
+		csb.border_color = Color(sc.r, sc.g, sc.b, 0.78)
+		csb.set_border_width_all(2)
+		pc.add_theme_stylebox_override("panel", csb)
+		cards_row.add_child(pc)
+
+		var cvb := VBoxContainer.new()
+		cvb.add_theme_constant_override("separation", 8)
+		pc.add_child(cvb)
+
+		var tl := Label.new()
+		tl.text = str(sec["title"])
+		tl.add_theme_font_size_override("font_size", 16)
+		tl.add_theme_color_override("font_color", sc)
+		cvb.add_child(tl)
+
+		var bl := Label.new()
+		bl.text = str(sec["body"])
+		bl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		bl.size_flags_vertical = Control.SIZE_EXPAND_FILL
+		bl.add_theme_font_size_override("font_size", 13)
+		bl.add_theme_color_override("font_color", Color(0.90, 0.94, 1.0))
+		cvb.add_child(bl)
+
+	var ok_b := Button.new()
+	ok_b.text = "明白了，直接开玩！"
+	ok_b.custom_minimum_size = Vector2(240, 42)
+	ok_b.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+	ok_b.add_theme_font_size_override("font_size", 17)
+	ok_b.focus_mode = Control.FOCUS_NONE
+	ok_b.pressed.connect(func() -> void:
+		Sfx.play("card_pick", 0.03, 80, -8.0)
+		MetaSave.mark_tutorial_seen()
+		_tutorial_modal.visible = false
+	)
+	vb.add_child(ok_b)
+
+
+func _open_tutorial_modal() -> void:
+	if _tut_toast != null and is_instance_valid(_tut_toast):
+		_tut_toast.visible = false
+	MetaSave.mark_tutorial_seen()
+	_tutorial_modal.visible = true
+
+
+func _show_tutorial_toast() -> void:
+	if _tut_toast != null and is_instance_valid(_tut_toast):
+		_tut_toast.visible = true
+		return
+	_tut_toast = PanelContainer.new()
+	_tut_toast.anchor_left = 0.0; _tut_toast.anchor_right = 0.0
+	_tut_toast.anchor_top = 0.0; _tut_toast.anchor_bottom = 0.0
+	_tut_toast.offset_left = 22; _tut_toast.offset_right = 472
+	_tut_toast.offset_top = 56; _tut_toast.offset_bottom = 98
+	var tsb := StyleBoxFlat.new()
+	tsb.bg_color = Color(0.08, 0.14, 0.24, 0.94)
+	tsb.set_corner_radius_all(10)
+	tsb.set_content_margin_all(6)
+	tsb.border_color = Color("#48dcff")
+	tsb.set_border_width_all(2)
+	_tut_toast.add_theme_stylebox_override("panel", tsb)
+	add_child(_tut_toast)
+
+	var hb := HBoxContainer.new()
+	hb.add_theme_constant_override("separation", 8)
+	_tut_toast.add_child(hb)
+
+	var lb := Label.new()
+	lb.text = "首次游玩？点右侧 10 秒看懂操作（不强制）"
+	lb.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	lb.add_theme_font_size_override("font_size", 13)
+	lb.add_theme_color_override("font_color", Color(0.92, 0.97, 1.0))
+	hb.add_child(lb)
+
+	var go_b := Button.new()
+	go_b.text = "看教程"
+	go_b.custom_minimum_size = Vector2(68, 28)
+	go_b.add_theme_font_size_override("font_size", 12)
+	go_b.focus_mode = Control.FOCUS_NONE
+	go_b.pressed.connect(func() -> void:
+		Sfx.play("ui_click")
+		_open_tutorial_modal()
+	)
+	hb.add_child(go_b)
+
+	var sk_b := Button.new()
+	sk_b.text = "跳过 ×"
+	sk_b.custom_minimum_size = Vector2(62, 28)
+	sk_b.add_theme_font_size_override("font_size", 12)
+	sk_b.focus_mode = Control.FOCUS_NONE
+	sk_b.pressed.connect(func() -> void:
+		Sfx.play("ui_click")
+		MetaSave.mark_tutorial_seen()
+		_tut_toast.visible = false
+	)
+	hb.add_child(sk_b)
 
 
 func _process(delta: float) -> void:

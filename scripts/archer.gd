@@ -146,6 +146,8 @@ var clone_timer := 0.0
 var clone_offset := Vector2(56, -18)
 var clone_fire_cd := 0.0
 var slow_timer := 0.0
+var kill_surge_timer := 0.0  # PVP 击杀敌人后的 3 秒迅捷移速激励
+var locate_timer := 4.5      # 开局 / 复活时的高亮「你在这里！」指引倒计时
 var pending_lasers: Array[Dictionary] = []
 
 # ---- 等级与战绩 ----
@@ -299,6 +301,7 @@ func drop_half_level_and_respawn(spawn_pos: Vector2) -> void:
 	downed = false
 	respawn_timer = 0.0
 	invuln = 2.8
+	locate_timer = 3.2 if is_player else 0.0
 	position = spawn_pos
 	net_target_pos = spawn_pos
 	visible = true
@@ -313,8 +316,9 @@ func drop_half_level_and_respawn(spawn_pos: Vector2) -> void:
 
 func xp_needed() -> float:
 	if game != null and game.game_mode == "survivor":
-		return 22.0 + level * 16.0
-	return 38.0 + level * 24.0
+		# PVE 节奏曲线：前期（0~4分钟）升级克制紧迫，约 5 分钟成型解锁超武进入爽游割草！
+		return 54.0 + level * 36.0 + float(level * level) * 3.0
+	return 40.0 + level * 26.0
 
 
 func context_label() -> String:
@@ -426,6 +430,7 @@ func _physics_process(delta: float) -> void:
 		recoil = maxf(recoil - delta * 6.0, 0.0)
 		emote_timer = maxf(emote_timer - delta, 0.0)
 		emote_cd = maxf(emote_cd - delta, 0.0)
+		locate_timer = maxf(locate_timer - delta, 0.0)
 		visible = alive
 		if alive and (is_player or game.visible_world_rect(180.0).has_point(position)):
 			queue_redraw()
@@ -480,6 +485,8 @@ func _physics_process(delta: float) -> void:
 	active_cd = maxf(active_cd - delta * (2.0 if has_rune("cdr") else 1.0), 0.0)
 	out_of_combat += delta
 	slow_timer = maxf(slow_timer - delta, 0.0)
+	kill_surge_timer = maxf(kill_surge_timer - delta, 0.0)
+	locate_timer = maxf(locate_timer - delta, 0.0)
 	rapid_timer = maxf(rapid_timer - delta, 0.0)
 
 	# 四角符文 & Mid Boss 增益倒计时结算（到期自动清空临时血量）
@@ -540,7 +547,7 @@ func _physics_process(delta: float) -> void:
 		if move_dir.length() > 1.0:
 			move_dir = move_dir.normalized()
 
-		var spd := move_speed * (0.60 if slow_timer > 0.0 else 1.0) * (1.30 if room_buff == "speed_lane" else 1.0)
+		var spd := move_speed * (0.60 if slow_timer > 0.0 else 1.0) * (1.30 if room_buff == "speed_lane" else 1.0) * (1.18 if kill_surge_timer > 0.0 else 1.0)
 		position += (move_dir * spd + knockback_vel) * delta
 		knockback_vel = knockback_vel.lerp(Vector2.ZERO, clampf(delta * 13.0, 0.0, 1.0))
 		if knockback_vel.length_squared() < 4.0:
@@ -584,12 +591,16 @@ func _read_player_controls() -> void:
 	if game.hud != null and game.hud.move_joy_vec != Vector2.ZERO:
 		move_dir = game.hud.move_joy_vec
 
-	# 手动瞄准优先：手机右摇杆划动 或 PC 鼠标左键按住
+	# 1. 手机/触屏独立右摇杆优先：以右下角摇杆圆心（而非角色中心）做相对偏移，完全不挡视野！
 	if game.hud != null and game.hud.aim_joy_active:
-		if game.hud.aim_joy_vec.length() > 0.16:
+		if game.hud.aim_joy_vec.length() > 0.14:
 			aim_dir = game.hud.aim_joy_vec.normalized()
 			wants_fire = true
-			return
+		else:
+			wants_fire = false
+		return
+
+	# 2. PC 真实鼠标左键瞄准开火（触屏设备绝不走鼠标坐标回退，防止手指点屏幕时乱转向）
 	if game.hud != null and game.hud.mouse_fire_held:
 		var mpos := get_global_mouse_position()
 		var to_m := mpos - position
@@ -598,7 +609,7 @@ func _read_player_controls() -> void:
 		wants_fire = true
 		return
 
-	# 幸存者模式下，如果开启「辅助自动开火」，松手时会自动瞄准最近怪物方便专心走位躲弹幕！
+	# 3. 幸存者模式辅助自动开火：松开右摇杆/鼠标时自动锁定最近怪物
 	if game.game_mode == "survivor" and survivor_auto_fire and game.swarm != null:
 		var near := game.swarm.find_nearest_pos(position, effective_attack_range() * 1.1)
 		if near != Vector2.INF:
@@ -608,7 +619,10 @@ func _read_player_controls() -> void:
 		wants_fire = false
 		return
 
-	# PVP 模式 100% 纯手动瞄准开火
+	# 4. 触屏模式待机保持上次朝向；PC 键鼠待机跟随鼠标预览虚线
+	if game.hud != null and game.hud.is_touch_ui:
+		wants_fire = false
+		return
 	var mp := get_global_mouse_position()
 	var tm := mp - position
 	if tm.length_squared() > 36.0:
@@ -1117,13 +1131,22 @@ func _die(killer: Archer) -> void:
 	if killer != null:
 		killer.kills += 1
 		if game != null and game.game_mode == "pvp":
-			killer.add_kill_score(100)
+			# PVP 击杀高额悬赏：打人收益远超刷野！（+150基础分 +20×受害者等级 + 高额直达经验 + 回血25% + 减CD + 3秒加速！）
+			var pts := 150 + level * 20
+			killer.add_kill_score(pts)
+			var xp_reward := (52.0 + level * 24.0) * (1.25 if killer.char_id == "gpt" else 1.0)
+			killer.gain_xp(xp_reward)
+			killer.heal_hp(killer.max_hp * 0.25)
+			killer.active_cd = maxf(0.0, killer.active_cd - (4.5 if killer.char_id == "grok" else 2.5))
+			killer.kill_surge_timer = 3.0
+			game.spawn_buff_aura(killer, Color("#ffd84a"))
+			game.spawn_text(killer.position + Vector2(0, -killer.radius - 46), "+%d 击杀赏金！回血+提速" % pts, Color("#ffe052"), 19)
 		else:
 			killer.score += 60 + level * 25
-		var xp_reward := (20.0 + level * 14.0) * (1.25 if killer.char_id == "gpt" else 1.0)
-		killer.gain_xp(xp_reward)
-		if killer.char_id == "grok":
-			killer.active_cd = maxf(0.0, killer.active_cd - 4.0)
+			var xp_reward := (20.0 + level * 14.0) * (1.25 if killer.char_id == "gpt" else 1.0)
+			killer.gain_xp(xp_reward)
+			if killer.char_id == "grok":
+				killer.active_cd = maxf(0.0, killer.active_cd - 4.0)
 		if killer == game.player:
 			Sfx.play("kill", 0.05, 80, -7.0)
 	died.emit(self, killer)
@@ -1433,6 +1456,23 @@ func _draw() -> void:
 	var lcol: Color = NetManager.TEAM_COLORS[clampi(team_id, 0, NetManager.TEAM_COLORS.size() - 1)] if (team_id > 0 and game.game_mode == "pvp") else (Color(1, 0.95, 0.5) if is_player else Color.WHITE)
 	draw_string_outline(font, Vector2(-105, top - 7.0), label, HORIZONTAL_ALIGNMENT_CENTER, 210, 14, 4, Color(0, 0, 0, 0.85))
 	draw_string(font, Vector2(-105, top - 7.0), label, HORIZONTAL_ALIGNMENT_CENTER, 210, 14, lcol)
+
+	# 开局 / 复活高亮位置指引（「▼ 你在这里！」+ 呼吸雷达波，进场一秒找到自己！）
+	if is_player and locate_timer > 0.0:
+		var la := clampf(locate_timer / 0.8, 0.0, 1.0)
+		var ring_p := fposmod(anim_t * 1.4, 1.0)
+		draw_arc(Vector2.ZERO, radius + 16.0 + ring_p * 54.0, 0.0, TAU, 36, Color(1.0, 0.92, 0.32, (1.0 - ring_p) * 0.88 * la), 3.4)
+		var ring_p2 := fposmod(anim_t * 1.4 + 0.5, 1.0)
+		draw_arc(Vector2.ZERO, radius + 16.0 + ring_p2 * 54.0, 0.0, TAU, 36, Color(0.32, 0.95, 1.0, (1.0 - ring_p2) * 0.78 * la), 2.6)
+		var bounce := absf(sin(anim_t * 6.0)) * 10.0
+		var ay := top - 34.0 - bounce
+		var tri := PackedVector2Array([Vector2(0, ay + 12), Vector2(-10, ay - 2), Vector2(10, ay - 2)])
+		draw_colored_polygon(tri, Color(1.0, 0.90, 0.28, la))
+		var tag_rc := Rect2(-64.0, ay - 30.0, 128.0, 24.0)
+		draw_rect(tag_rc, Color(0.08, 0.12, 0.22, 0.88 * la))
+		draw_rect(tag_rc, Color(1.0, 0.90, 0.32, la), false, 2.0)
+		draw_string_outline(font, Vector2(-64.0, ay - 12.0), "你在这里！", HORIZONTAL_ALIGNMENT_CENTER, 128.0, 15, 3, Color(0, 0, 0, 0.9 * la))
+		draw_string(font, Vector2(-64.0, ay - 12.0), "你在这里！", HORIZONTAL_ALIGNMENT_CENTER, 128.0, 15, Color(1.0, 0.95, 0.48, la))
 
 	# 战内快捷热梗表情 / 语音气泡（带弹出回弹动画与指向小三角！）
 	if emote_timer > 0.0 and emote_text != "":

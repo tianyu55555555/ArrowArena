@@ -44,6 +44,8 @@ var demo_pause := false
 var demo_midboss := false
 var demo_blessing := false
 var demo_storm := false
+var demo_touch := false
+var demo_pve_boss := ""
 var demo_spawn_pos := Vector2.INF
 var demo_skill_capture := -1.0
 var _demo_skill_fired := false
@@ -295,7 +297,7 @@ func _gen_pvp_5grid() -> void:
 			"bg": Color("#1d2e42"), "color": Color("#3ce4ff"),
 		},
 		{
-			"id": "creep_den", "name": "👾 脏数据野区", "desc": "清剿野生数据怪 · 爆高阶 Token 与血药！",
+			"id": "creep_den", "name": "👾 脏数据野区", "desc": "少量野怪点缀补给 · 击杀玩家收益远高于刷野！",
 			"rect": Rect2(766.0, -740.0, 814.0, 1480.0),
 			"bg": Color("#2d2244"), "color": Color("#c978ff"),
 		},
@@ -430,9 +432,9 @@ func _gen_pvp_5grid() -> void:
 		{"base": Vector2(-1430.0, 0.0), "axis": Vector2(0.0, 440.0), "spd": 1.50, "phase": 1.1, "r": 28.0},
 		{"base": Vector2(-930.0, 0.0), "axis": Vector2(0.0, 410.0), "spd": 1.72, "phase": 3.7, "r": 28.0},
 	]
-	# 东·脏数据野区：初始生成 6 只野生数据怪（含 1 只高血重装垃圾怪，清剿爆 Token 与血药！）
+	# 东·脏数据野区：初始生成 5 只野生数据怪（少量补给点缀，PVP 核心收益来自击杀玩家与抢 Mid Boss！）
 	if net_role != "client":
-		for ci in 6:
+		for ci in 5:
 			_spawn_pvp_creep("spam_tank" if ci == 0 else ("hallucination" if ci % 2 == 1 else "glitch"))
 
 
@@ -454,7 +456,7 @@ func _spawn_pvp_creep(kind := "") -> void:
 		if not point_in_wall(cand, 36.0) and not point_in_rock(cand, 36.0):
 			pos = cand
 			break
-	var hp := 215.0 if kind == "spam_tank" else (76.0 if kind == "hallucination" else 96.0)
+	var hp := 270.0 if kind == "spam_tank" else (96.0 if kind == "hallucination" else 120.0)
 	var rad := 26.0 if kind == "spam_tank" else 19.0
 	var spd := 86.0 if kind == "spam_tank" else (145.0 if kind == "hallucination" else 112.0)
 	pvp_creeps.append({
@@ -482,9 +484,9 @@ func _update_pvp_room_hazards(delta: float) -> void:
 				spawn_burst(tp, Color("#ff4048"), 34.0)
 
 	# 2. 东·脏数据野区野生数据怪巡逻、反击与定时刷新
-	if pvp_creeps.size() < 6:
+	if pvp_creeps.size() < 5:
 		_creep_respawn_t += delta
-		if _creep_respawn_t >= 5.5:
+		if _creep_respawn_t >= 9.5:
 			_creep_respawn_t = 0.0
 			_spawn_pvp_creep()
 
@@ -849,15 +851,14 @@ func _damage_pvp_creep(idx: int, dmg: float, is_crit: bool, attacker: Archer, kb
 		if attacker == player:
 			Sfx.play("kill", 0.06, 60, -8.0)
 		if attacker != null and is_instance_valid(attacker):
-			attacker.add_kill_score(45 if is_tank else 22)
-		# 清剿野怪必爆高阶金/紫 Token + 回血血药！
-		var tok_cnt := 5 if is_tank else 3
+			attacker.add_kill_score(18 if is_tank else 8)
+		# 野怪仅提供少量补充 Token 与概率血药，避免刷野收益高于正面 PVP 击杀！
+		var tok_cnt := 3 if is_tank else 2
 		for ti in tok_cnt:
 			var ang := ti * TAU / float(tok_cnt) + randf() * 0.4
-			spawn_orb(cp + Vector2.from_angle(ang) * randf_range(16.0, 44.0), 15 if is_tank else [10, 15].pick_random())
-		spawn_heart(cp + Vector2(20, 0))
-		if is_tank:
-			spawn_heart(cp + Vector2(-20, 0))
+			spawn_orb(cp + Vector2.from_angle(ang) * randf_range(16.0, 38.0), 5)
+		if is_tank or randf() < 0.40:
+			spawn_heart(cp + Vector2(18, 0))
 
 
 func room_effect_at(p: Vector2) -> String:
@@ -1442,7 +1443,7 @@ func debug_shot(delta: float) -> void:
 	if demo_pick and not _demo_picked and _shot_timer > 2.3 and hud.skill_panel.visible:
 		_demo_picked = true
 		hud.pick_skill_for_demo(1)
-	var capture_at := (2.2 + demo_skill_capture) if demo_skill_capture >= 0.0 else (2.1 if demo_pause else (2.65 if demo_pick else (2.5 if demo_levelup else 3.2)))
+	var capture_at := (2.2 + demo_skill_capture) if demo_skill_capture >= 0.0 else (2.1 if demo_pause else (2.65 if demo_pick else (2.5 if demo_levelup else (2.45 if demo_pve_boss == "cage_charger" else (3.15 if demo_pve_boss != "" else (1.55 if demo_touch else 3.2))))))
 	if _shot_timer > capture_at:
 		_shot_done = true
 		get_viewport().get_texture().get_image().save_png(shot_path)
@@ -2020,6 +2021,8 @@ func bounce_normal_at(p: Vector2) -> Vector2:
 func resolve_position(a: Archer) -> void:
 	var lim := ARENA_HALF - a.radius
 	a.position = a.position.clamp(Vector2(-lim, -lim), Vector2(lim, lim))
+	if game_mode == "survivor" and swarm != null:
+		swarm.clamp_to_boss_cage(a)
 	# 1. 圆 vs 矩形墙壁平滑滑动碰撞：「量子穿墙」仅可穿过区域内薄墙，区域分割厚墙始终不可穿！
 	for w in walls:
 		if a.phase_wall and is_thin_wall(w):
