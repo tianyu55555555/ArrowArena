@@ -39,13 +39,13 @@ func _ready() -> void:
 			})
 	elif kind == "hit_impact":
 		var base_ang := hit_dir.angle()
-		var count := 10 if is_crit else 6
+		var count := 12 if is_crit else 8
 		for i in count:
-			var spread := randf_range(-0.95, 0.95) if i < count - 2 else randf_range(-PI, PI)
+			var spread := randf_range(-0.98, 0.98) if i < count - 2 else randf_range(-PI, PI)
 			_sparks.append({
 				"dir": Vector2.from_angle(base_ang + spread),
-				"dist": randf_range(26.0, 62.0) * (1.35 if is_crit else 1.0),
-				"sz": randf_range(3.5, 6.5) * (1.25 if is_crit else 1.0),
+				"dist": randf_range(30.0, 70.0) * (1.38 if is_crit else 1.05),
+				"sz": randf_range(4.2, 7.6) * (1.28 if is_crit else 1.05),
 				"alt": (i % 2 == 1),
 			})
 
@@ -72,29 +72,33 @@ func _draw() -> void:
 	match kind:
 		"text":
 			var font := PixelSprites.ui_font()
-			draw_string_outline(font, Vector2(-100, 0), text, HORIZONTAL_ALIGNMENT_CENTER, 200, font_size, 5, Color(0, 0, 0, 0.85))
+			var pop := clampf(t / 0.13, 0.0, 1.0)
+			var sc := lerpf(1.52 if font_size >= 21 else 1.32, 1.0, 1.0 - (1.0 - pop) * (1.0 - pop))
+			draw_set_transform(Vector2.ZERO, 0.0, Vector2(sc, sc))
+			draw_string_outline(font, Vector2(-100, 0), text, HORIZONTAL_ALIGNMENT_CENTER, 200, font_size, 5, Color(0, 0, 0, 0.92))
 			draw_string(font, Vector2(-100, 0), text, HORIZONTAL_ALIGNMENT_CENTER, 200, font_size, color)
+			draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
 		"hit_impact":
 			var ease_out := 1.0 - (1.0 - k) * (1.0 - k)
-			var main_col := Color(0.55, 0.88, 1.0) if is_shield else (Color(1.0, 0.72, 0.22) if is_crit else color)
-			if k < 0.55:
-				var fk := 1.0 - k / 0.55
-				var flash_r := (16.0 if is_crit else 11.0) * fk
-				draw_circle(Vector2.ZERO, flash_r, Color(1.0, 0.98, 0.9, 0.85 * fk))
-				var slash_len := (26.0 if is_crit else 18.0) * (0.6 + ease_out * 0.8)
+			var main_col := Color(0.55, 0.90, 1.0) if is_shield else (Color(1.0, 0.68, 0.18) if is_crit else color)
+			if k < 0.62:
+				var fk := 1.0 - k / 0.62
+				var flash_r := (22.0 if is_crit else 15.0) * fk
+				draw_circle(Vector2.ZERO, flash_r, Color(1.0, 0.98, 0.9, 0.92 * fk))
+				var slash_len := (34.0 if is_crit else 23.0) * (0.6 + ease_out * 0.85)
 				var d1 := hit_dir.rotated(0.55)
 				var d2 := hit_dir.rotated(-0.55)
-				draw_line(-d1 * slash_len, d1 * slash_len, Color(1.0, 0.96, 0.85, fk), 3.2 if is_crit else 2.2)
-				draw_line(-d2 * slash_len * 0.75, d2 * slash_len * 0.75, Color(main_col.r, main_col.g, main_col.b, fk), 2.5 if is_crit else 1.8)
-			var r := (10.0 + ease_out * (34.0 if is_crit else 24.0))
-			draw_arc(Vector2.ZERO, r, 0.0, TAU, 24, Color(main_col.r, main_col.g, main_col.b, (1.0 - k) * 0.85), (3.6 if is_crit else 2.4) * (1.0 - k) + 0.8)
+				draw_line(-d1 * slash_len, d1 * slash_len, Color(1.0, 0.97, 0.86, fk), 4.2 if is_crit else 2.8)
+				draw_line(-d2 * slash_len * 0.80, d2 * slash_len * 0.80, Color(main_col.r, main_col.g, main_col.b, fk), 3.2 if is_crit else 2.2)
+			var r := (12.0 + ease_out * (42.0 if is_crit else 29.0))
+			draw_arc(Vector2.ZERO, r, 0.0, TAU, 24, Color(main_col.r, main_col.g, main_col.b, (1.0 - k) * 0.92), (4.4 if is_crit else 3.0) * (1.0 - k) + 1.0)
 			if is_shield or is_crit:
-				var r2 := 6.0 + ease_out * 44.0
-				draw_arc(Vector2.ZERO, r2, hit_dir.angle() - 1.1, hit_dir.angle() + 1.1, 16, Color(1.0, 0.95, 0.7, (1.0 - k) * 0.75), 2.2)
+				var r2 := 8.0 + ease_out * 54.0
+				draw_arc(Vector2.ZERO, r2, hit_dir.angle() - 1.25, hit_dir.angle() + 1.25, 18, Color(1.0, 0.95, 0.72, (1.0 - k) * 0.85), 2.8)
 			for sp in _sparks:
 				var p := (sp["dir"] as Vector2) * (float(sp["dist"]) * ease_out)
-				var sz := float(sp["sz"]) * (1.0 - k * 0.75)
-				var sc := Color(1.0, 0.97, 0.85) if bool(sp["alt"]) else main_col
+				var sz := float(sp["sz"]) * (1.0 - k * 0.70)
+				var sc := Color(1.0, 0.98, 0.88) if bool(sp["alt"]) else main_col
 				draw_rect(Rect2(p - Vector2(sz, sz) * 0.5, Vector2(sz, sz)), sc)
 		"basin_drop":
 			# 天降巨型精钢铁盆：前半段高空疾坠 + 地面锁敌预警圈与渐大阴影；落地瞬间 DUANG! 金属震荡波 + 弹性弹跳晃动！

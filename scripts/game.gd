@@ -19,8 +19,8 @@ const STORM_MAX_R := 2150.0
 const STORM_MIN_R := 440.0
 const ORB_TARGET := 125
 const HEART_TARGET := 14
-const MAX_TEXT_FX := 28
-const MAX_HIT_FX := 24
+const MAX_TEXT_FX := 72
+const MAX_HIT_FX := 64
 
 var game_mode := "pvp"         # "pvp" | "survivor"
 var pvp_variant := "ffa"       # "ffa" | "2v2v2v2"
@@ -85,6 +85,7 @@ var rerolls_left := 3
 var active_projectiles := 0
 var _text_fx_count := 0
 var _hit_fx_count := 0
+var _net_fx_budget := 12
 var _shake := 0.0
 
 var _shot_timer := 0.0
@@ -142,6 +143,7 @@ func _ready() -> void:
 	proj_layer = _layer()
 	archer_layer = _layer()
 	fx_layer = _layer()
+	fx_layer.z_index = 20
 
 	camera = Camera2D.new()
 	camera.position_smoothing_enabled = true
@@ -315,22 +317,29 @@ func _gen_pvp_5grid() -> void:
 		Rect2(714.0, -714.0, 52.0, 632.0),
 		Rect2(714.0, 82.0, 52.0, 632.0),
 
-		# --- 2. 四角符文房厚墙分割（纵向全封闭 + 横向各留唯一 1 个 164px 出入口通往东/西房间）---
-		# 四个纵向全封厚墙（隔开南北房间与四角符文房）
-		Rect2(-766.0, -1600.0, 52.0, 834.0),
-		Rect2(714.0, -1600.0, 52.0, 834.0),
-		Rect2(-766.0, 766.0, 52.0, 834.0),
-		Rect2(714.0, 766.0, 52.0, 834.0),
-		# 西北角南墙（唯一出入口 x = -1262..-1098，宽 164px）
+		# --- 2. 四角符文房厚墙分割（每相邻两个区域之间都有唯一 1 个 164px ~3身位宽通道，全图 3x3 区域无缝连通！）---
+		# 西北 ↔ 北（唯一通道 y = -1262..-1098，宽 164px）
+		Rect2(-766.0, -1600.0, 52.0, 338.0),
+		Rect2(-766.0, -1098.0, 52.0, 332.0),
+		# 北 ↔ 东北（唯一通道 y = -1262..-1098，宽 164px）
+		Rect2(714.0, -1600.0, 52.0, 338.0),
+		Rect2(714.0, -1098.0, 52.0, 332.0),
+		# 西南 ↔ 南（唯一通道 y = 1098..1262，宽 164px）
+		Rect2(-766.0, 766.0, 52.0, 332.0),
+		Rect2(-766.0, 1262.0, 52.0, 338.0),
+		# 南 ↔ 东南（唯一通道 y = 1098..1262，宽 164px）
+		Rect2(714.0, 766.0, 52.0, 332.0),
+		Rect2(714.0, 1262.0, 52.0, 338.0),
+		# 西北 ↔ 西（唯一通道 x = -1262..-1098，宽 164px）
 		Rect2(-1600.0, -766.0, 338.0, 52.0),
 		Rect2(-1098.0, -766.0, 332.0, 52.0),
-		# 东北角南墙（唯一出入口 x = 1098..1262，宽 164px）
+		# 东北 ↔ 东（唯一通道 x = 1098..1262，宽 164px）
 		Rect2(766.0, -766.0, 332.0, 52.0),
 		Rect2(1262.0, -766.0, 338.0, 52.0),
-		# 西南角北墙（唯一出入口 x = -1262..-1098，宽 164px）
+		# 西南 ↔ 西（唯一通道 x = -1262..-1098，宽 164px）
 		Rect2(-1600.0, 714.0, 338.0, 52.0),
 		Rect2(-1098.0, 714.0, 332.0, 52.0),
-		# 东南角北墙（唯一出入口 x = 1098..1262，宽 164px）
+		# 东南 ↔ 东（唯一通道 x = 1098..1262，宽 164px）
 		Rect2(766.0, 714.0, 332.0, 52.0),
 		Rect2(1262.0, 714.0, 338.0, 52.0),
 
@@ -378,15 +387,15 @@ func _gen_pvp_5grid() -> void:
 		Rect2(1075.0, -155.0, 245.0, 22.0),
 		Rect2(1075.0, 133.0, 245.0, 22.0),
 
-		# --- 8. 四角符文房内薄墙掩体（每角 2 面长薄墙护卫祭坛）---
-		Rect2(-1470.0, -995.0, 235.0, 22.0),
-		Rect2(-965.0, -1425.0, 22.0, 235.0),
-		Rect2(1235.0, -995.0, 235.0, 22.0),
-		Rect2(943.0, -1425.0, 22.0, 235.0),
-		Rect2(-1470.0, 973.0, 235.0, 22.0),
-		Rect2(-965.0, 1190.0, 22.0, 235.0),
-		Rect2(1235.0, 973.0, 235.0, 22.0),
-		Rect2(943.0, 1190.0, 22.0, 235.0),
+		# --- 8. 四角符文房内薄墙掩体（错位护卫祭坛，确保横纵双通道出入流畅不堵门）---
+		Rect2(-1480.0, -995.0, 210.0, 22.0),
+		Rect2(-995.0, -1480.0, 22.0, 210.0),
+		Rect2(1270.0, -995.0, 210.0, 22.0),
+		Rect2(973.0, -1480.0, 22.0, 210.0),
+		Rect2(-1480.0, 973.0, 210.0, 22.0),
+		Rect2(-995.0, 1270.0, 22.0, 210.0),
+		Rect2(1270.0, 973.0, 210.0, 22.0),
+		Rect2(973.0, 1270.0, 22.0, 210.0),
 	]
 	# 精炼战术像素晶碑（保留四角开阔地带作为「四角增益符文祭坛」）
 	var pillars := [
@@ -773,14 +782,19 @@ func _damage_mid_boss(dmg: float, is_crit: bool, attacker: Archer, kb: Vector2, 
 	mid_boss["flash"] = 0.14
 	mid_boss["kb"] = ((mid_boss["kb"] as Vector2) + kb * 0.22).limit_length(180.0)
 	var mp: Vector2 = mid_boss["pos"]
-	spawn_hit_fx(mp, kb.normalized() if kb.length_squared() > 1.0 else Vector2.RIGHT, fx_col, is_crit, false)
-	spawn_text(mp + Vector2(randf_range(-16, 16), -54), ("%d!" % int(dmg)) if is_crit else str(int(dmg)), Color(1.0, 0.58, 0.2) if is_crit else Color(1.0, 0.92, 0.42), 22 if is_crit else 17)
+	var an := attacker.net_id if (attacker != null and is_instance_valid(attacker)) else 0
+	var prio := is_crit or (attacker != null and attacker.is_human())
+	spawn_hit_fx(mp, kb.normalized() if kb.length_squared() > 1.0 else Vector2.RIGHT, fx_col, is_crit, false, prio, false, an, 0)
+	spawn_text(mp + Vector2(randf_range(-16, 16), -54), ("%d!" % int(dmg)) if is_crit else str(int(dmg)), Color(1.0, 0.58, 0.2) if is_crit else Color(1.0, 0.92, 0.42), 23 if is_crit else 18, prio)
 	if attacker != null and is_instance_valid(attacker) and attacker.alive:
 		var ls := attacker.effective_lifesteal()
 		if ls > 0.0:
 			attacker.heal_hp(dmg * ls)
+		if is_crit and attacker.char_id == "grok":
+			attacker.heal_hp(dmg * 0.12)
 	if attacker == player:
-		Sfx.play("crit" if is_crit else "hit", 0.08, 45, -10.0)
+		Sfx.play("crit" if is_crit else "hit", 0.08, 42, -6.5 if is_crit else -8.5)
+		add_shake(3.8 if is_crit else 1.5)
 	if float(mid_boss["hp"]) <= 0.0:
 		mid_boss = {}
 		mid_boss_cd = MID_BOSS_RESPAWN
@@ -836,14 +850,19 @@ func _damage_pvp_creep(idx: int, dmg: float, is_crit: bool, attacker: Archer, kb
 	c["flash"] = 0.14
 	c["kb"] = ((c["kb"] as Vector2) + kb * (0.45 if str(c["kind"]) == "spam_tank" else 0.9)).limit_length(380.0)
 	var cp: Vector2 = c["pos"]
-	spawn_hit_fx(cp, kb.normalized() if kb.length_squared() > 1.0 else Vector2.RIGHT, fx_col, is_crit, false)
-	spawn_text(cp + Vector2(randf_range(-10, 10), -26), ("%d!" % int(dmg)) if is_crit else str(int(dmg)), Color(1.0, 0.58, 0.2) if is_crit else Color(1.0, 0.94, 0.55), 20 if is_crit else 16)
+	var an := attacker.net_id if (attacker != null and is_instance_valid(attacker)) else 0
+	var prio := is_crit or (attacker != null and attacker.is_human())
+	spawn_hit_fx(cp, kb.normalized() if kb.length_squared() > 1.0 else Vector2.RIGHT, fx_col, is_crit, false, prio, false, an, 0)
+	spawn_text(cp + Vector2(randf_range(-10, 10), -26), ("%d!" % int(dmg)) if is_crit else str(int(dmg)), Color(1.0, 0.58, 0.2) if is_crit else Color(1.0, 0.94, 0.55), 21 if is_crit else 17, prio)
 	if attacker != null and is_instance_valid(attacker) and attacker.alive:
 		var ls := attacker.effective_lifesteal()
 		if ls > 0.0:
 			attacker.heal_hp(dmg * ls)
+		if is_crit and attacker.char_id == "grok":
+			attacker.heal_hp(dmg * 0.12)
 	if attacker == player:
-		Sfx.play("crit" if is_crit else "hit", 0.08, 45, -11.0)
+		Sfx.play("crit" if is_crit else "hit", 0.08, 42, -6.5 if is_crit else -8.5)
+		add_shake(3.2 if is_crit else 1.2)
 	if float(c["hp"]) <= 0.0:
 		var is_tank := (str(c["kind"]) == "spam_tank")
 		pvp_creeps.remove_at(idx)
@@ -1095,6 +1114,7 @@ func fire_laser(owner_archer: Archer, dir: Vector2, length: float, dmg: float, w
 	beam.color = col
 	beam.life = 0.24 if width > 12.0 else 0.16
 	fx_layer.add_child(beam)
+	_broadcast_fx("laser", start, {"e": end_pos - start, "w": width, "c": col})
 
 	if game_mode == "survivor" and swarm != null:
 		swarm.damage_along_beam(start, dir, end_dist, width, dmg, owner_archer, knockback)
@@ -1191,23 +1211,41 @@ func _on_net_emote(sender_nid: int, text: String) -> void:
 			Sfx.play("card_hover", 0.08, 90, -10.0)
 
 
-func spawn_text(p: Vector2, text: String, col: Color, fsize := 20) -> void:
-	if _text_fx_count >= MAX_TEXT_FX or not visible_world_rect(40.0).has_point(p):
+func _on_text_fx_exit() -> void:
+	_text_fx_count = maxi(0, _text_fx_count - 1)
+
+
+func _on_hit_fx_exit() -> void:
+	_hit_fx_count = maxi(0, _hit_fx_count - 1)
+
+
+func spawn_text(p: Vector2, text: String, col: Color, fsize := 20, priority := false, from_net := false) -> void:
+	if not from_net and net_role == "host":
+		if priority or _net_fx_budget > 0:
+			if not priority:
+				_net_fx_budget -= 1
+			_broadcast_fx("text", p, {"t": text, "c": col, "fs": fsize, "pr": priority})
+	if (not priority and _text_fx_count >= MAX_TEXT_FX) or not visible_world_rect(220.0).has_point(p):
 		return
 	var f := Fx.new()
 	f.kind = "text"
 	f.text = text
 	f.color = col
 	f.font_size = fsize
-	f.life = 0.65
+	f.life = 0.72
 	f.position = p
 	_text_fx_count += 1
-	f.tree_exited.connect(func() -> void: _text_fx_count = maxi(0, _text_fx_count - 1))
+	f.tree_exited.connect(_on_text_fx_exit)
 	fx_layer.add_child(f)
 
 
-func spawn_hit_fx(p: Vector2, hit_dir: Vector2, col: Color, is_crit := false, is_shield := false) -> void:
-	if _hit_fx_count >= MAX_HIT_FX or not visible_world_rect(70.0).has_point(p):
+func spawn_hit_fx(p: Vector2, hit_dir: Vector2, col: Color, is_crit := false, is_shield := false, priority := false, from_net := false, attacker_nid := 0, victim_nid := 0) -> void:
+	if not from_net and net_role == "host":
+		if priority or is_crit or _net_fx_budget > 0:
+			if not priority and not is_crit:
+				_net_fx_budget -= 1
+			_broadcast_fx("hit_impact", p, {"d": hit_dir, "c": col, "cr": is_crit, "sh": is_shield, "an": attacker_nid, "vn": victim_nid})
+	if (not priority and not is_crit and _hit_fx_count >= MAX_HIT_FX) or not visible_world_rect(240.0).has_point(p):
 		return
 	var f := Fx.new()
 	f.kind = "hit_impact"
@@ -1216,20 +1254,20 @@ func spawn_hit_fx(p: Vector2, hit_dir: Vector2, col: Color, is_crit := false, is
 	f.color = col
 	f.is_crit = is_crit
 	f.is_shield = is_shield
-	f.life = 0.28 if is_crit else 0.21
+	f.life = 0.30 if is_crit else 0.23
 	_hit_fx_count += 1
-	f.tree_exited.connect(func() -> void: _hit_fx_count = maxi(0, _hit_fx_count - 1))
+	f.tree_exited.connect(_on_hit_fx_exit)
 	fx_layer.add_child(f)
 
 
 func add_shake(amount: float) -> void:
-	_shake = minf(12.0, maxf(_shake, amount))
+	_shake = minf(14.0, maxf(_shake, amount))
 
 
 func spawn_burst(p: Vector2, col: Color, r: float, from_net := false) -> void:
 	if not from_net:
 		_broadcast_fx("burst", p, {"c": col, "r": r})
-	if not visible_world_rect(90.0).has_point(p):
+	if not visible_world_rect(220.0).has_point(p):
 		return
 	var f := Fx.new()
 	f.kind = "burst"
@@ -1240,7 +1278,9 @@ func spawn_burst(p: Vector2, col: Color, r: float, from_net := false) -> void:
 	fx_layer.add_child(f)
 
 
-func spawn_buff_aura(target: Node2D, col: Color) -> void:
+func spawn_buff_aura(target: Node2D, col: Color, from_net := false) -> void:
+	if not from_net and target is Archer:
+		_broadcast_fx("buff_aura", target.position, {"c": col, "nid": (target as Archer).net_id})
 	var f := Fx.new()
 	f.kind = "buff_aura"
 	f.follow_target = target
@@ -1251,8 +1291,10 @@ func spawn_buff_aura(target: Node2D, col: Color) -> void:
 	fx_layer.add_child(f)
 
 
-func spawn_orbital_fx(pos: Vector2, rad: float, col: Color) -> void:
-	if not visible_world_rect(140.0).has_point(pos):
+func spawn_orbital_fx(pos: Vector2, rad: float, col: Color, from_net := false) -> void:
+	if not from_net:
+		_broadcast_fx("orbital_strike", pos, {"r": rad, "c": col})
+	if not visible_world_rect(240.0).has_point(pos):
 		return
 	var f := Fx.new()
 	f.kind = "orbital_strike"
@@ -1357,6 +1399,7 @@ func _trigger_local_active() -> void:
 func _physics_process(delta: float) -> void:
 	if game_over:
 		return
+	_net_fx_budget = 12
 	survived_sec += delta
 
 	if net_role == "client":
@@ -1407,7 +1450,7 @@ func _process(delta: float) -> void:
 		var z := 1.0 / sqrt(player.radius / Archer.BASE_RADIUS)
 		camera.zoom = camera.zoom.lerp(Vector2(z, z), delta * 2.0)
 	if _shake > 0.05:
-		_shake = maxf(_shake - delta * 28.0, 0.0)
+		_shake = maxf(_shake - delta * 24.0, 0.0)
 		camera.offset = Vector2(randf_range(-_shake, _shake), randf_range(-_shake, _shake))
 	elif camera.offset != Vector2.ZERO:
 		camera.offset = Vector2.ZERO
@@ -1468,6 +1511,7 @@ func _net_host_tick(delta: float) -> void:
 				a.revive_prog, a.auto_revive_t, a.active_cd, a.evolved_weapon, a.room_buff, a.phase_wall, a.wall_pierce,
 				a.temp_hp, a.max_temp_hp, a.revive_charges, a.rune_timers.duplicate(),
 				a.kill_score, a.respawn_timer, a.antiheal_timer, a.antiheal_ratio,
+				a.domain_timer, a.orbit_timer, a.orbit_angle, a.clone_timer, a.rapid_timer, a.dash_timer, a.perm_orbit_blades,
 			])
 		var snap := {
 			"tl": time_left, "ss": survived_sec, "a": a_arr, "ts": team_scores.duplicate(),
@@ -1572,6 +1616,8 @@ func _on_net_snapshot(snap: Dictionary) -> void:
 			a = _spawn_archer(nid == my_nid, false, true, nid, int(r[4]), str(r[1]), str(r[2]), str(r[3]), 1)
 			if nid == my_nid:
 				player = a
+		var was_alive := a.alive
+		var old_pool := a.hp + a.shield + a.temp_hp
 		a.net_target_pos = r[5]
 		if not a.is_player:
 			a.aim_dir = r[6]
@@ -1589,6 +1635,23 @@ func _on_net_snapshot(snap: Dictionary) -> void:
 		if r.size() > 31:
 			a.kill_score = int(r[28]); a.respawn_timer = float(r[29])
 			a.antiheal_timer = float(r[30]); a.antiheal_ratio = float(r[31])
+		if r.size() > 38:
+			a.domain_timer = float(r[32]); a.orbit_timer = float(r[33]); a.orbit_angle = float(r[34])
+			a.clone_timer = float(r[35]); a.rapid_timer = float(r[36]); a.dash_timer = float(r[37])
+			a.perm_orbit_blades = int(r[38])
+		# 联机客户端受击感还原：实时对比血/盾总池变化，触发受击闪白挤压 + 玩家红屏震屏低音受击反馈！
+		var new_pool := a.hp + a.shield + a.temp_hp
+		if was_alive and old_pool - new_pool >= 1.5:
+			a.hit_flash = 0.16
+			a.hit_squash = 1.0
+			if a == player:
+				var heavy := (old_pool - new_pool) >= 28.0
+				add_shake(7.0 if heavy else 4.8)
+				if hud != null:
+					hud.trigger_damage_vignette(0.92 if heavy else 0.68)
+				Sfx.play("hit_taken", 0.06, 55, -5.5)
+		if not was_alive and a.alive and a == player:
+			a.locate_timer = 3.2
 		a.radius = Archer.BASE_RADIUS * minf(1.0 + (a.level - 1) * 0.024, 1.42)
 
 	for i in range(archers.size() - 1, -1, -1):
@@ -1607,6 +1670,7 @@ func _find_archer_by_nid(nid: int) -> Archer:
 func _on_net_proj(shooter_nid: int, pos: Vector2, dir: Vector2, wid: String, pscale: float, evolved: bool) -> void:
 	var src := _find_archer_by_nid(shooter_nid)
 	var wd := Weapons.get_data(wid)
+	var spd := float(wd["speed"])
 	var p := Projectile.new()
 	p.game = self
 	p.shooter = src
@@ -1617,27 +1681,68 @@ func _on_net_proj(shooter_nid: int, pos: Vector2, dir: Vector2, wid: String, psc
 	p.visual_only = true
 	p.wall_bounces = 1 if wid == "basin" else 0
 	p.wall_pierce = src != null and src.wall_pierce
-	p.velocity = dir.normalized() * float(wd["speed"])
-	p.life = 0.85
+	p.velocity = dir.normalized() * spd
+	var eff_range := src.effective_attack_range() if src != null else float(wd["range"])
+	p.max_dist = eff_range * 0.92
+	p.life = (eff_range * (1.42 if wid == "basin" else 1.18) / maxf(spd, 100.0)) if wid != "fan" else 2.4
 	p.color = wd["color"]
 	proj_layer.add_child(p)
-	if src != null and src.is_player:
-		Sfx.play("shoot_" + wid, 0.07, 65, -12.0)
+	if src != null:
+		src.recoil = 1.0
+		if src.is_player:
+			Sfx.play("shoot_" + wid, 0.07, 65, -11.0)
 
 
 func _on_net_fx(kind: String, pos: Vector2, extra: Dictionary) -> void:
+	var my_nid := NetManager.inst.my_id if NetManager.inst != null else 0
 	match kind:
 		"burst":
 			spawn_burst(pos, extra.get("c", Color.WHITE), float(extra.get("r", 40.0)), true)
+		"hit_impact":
+			var is_cr := bool(extra.get("cr", false))
+			var is_sh := bool(extra.get("sh", false))
+			var an := int(extra.get("an", 0))
+			var vn := int(extra.get("vn", 0))
+			spawn_hit_fx(pos, extra.get("d", Vector2.RIGHT), extra.get("c", Color(1.0, 0.92, 0.55)), is_cr, is_sh, an == my_nid or vn == my_nid or is_cr, true, an, vn)
+			if an == my_nid and my_nid != 0:
+				Sfx.play("crit" if is_cr else "hit", 0.08, 40, -6.5 if is_cr else -8.5)
+				add_shake(3.8 if is_cr else 1.6)
+			elif vn == my_nid and my_nid != 0:
+				Sfx.play("hit_taken", 0.06, 55, -5.5)
+				add_shake(7.0 if is_cr else 4.8)
+				if hud != null:
+					hud.trigger_damage_vignette(0.92 if is_cr else 0.68)
+		"text":
+			spawn_text(pos, str(extra.get("t", "")), extra.get("c", Color.WHITE), int(extra.get("fs", 20)), bool(extra.get("pr", false)), true)
+		"laser":
+			var beam := Fx.new()
+			beam.kind = "laser"
+			beam.position = pos
+			beam.beam_end = extra.get("e", Vector2.RIGHT * 240.0)
+			beam.beam_width = float(extra.get("w", 10.0))
+			beam.color = extra.get("c", Color.CYAN)
+			beam.life = 0.24 if beam.beam_width > 12.0 else 0.16
+			fx_layer.add_child(beam)
+			Sfx.play("shoot_laser", 0.05, 70, -10.0)
+		"buff_aura":
+			var tgt := _find_archer_by_nid(int(extra.get("nid", 0)))
+			if tgt != null:
+				spawn_buff_aura(tgt, extra.get("c", Color.GOLD), true)
+		"orbital_strike":
+			spawn_orbital_fx(pos, float(extra.get("r", 90.0)), extra.get("c", Color.CYAN), true)
+			Sfx.play("orbital", 0.08, 80, -8.5)
 		"basin_drop":
 			spawn_basin_drop_fx(pos, float(extra.get("r", 100.0)), float(extra.get("s", 1.6)), float(extra.get("f", 0.28)), bool(extra.get("d", true)), true)
-			Sfx.play("basin_clang", 0.07, 70, -7.0)
+			Sfx.play("basin_clang", 0.07, 70, -6.5)
 		"eclipse_slash":
 			spawn_eclipse_slash_fx(pos, float(extra.get("r", 150.0)), true)
+			Sfx.play("shoot_halberd", 0.06, 90, -8.0)
 		"lightning":
 			spawn_lightning_fx(extra.get("pts", PackedVector2Array()), extra.get("c", Color.CYAN), true)
+			Sfx.play("lightning", 0.08, 90, -10.0)
 		"meteor":
 			spawn_meteor_fx(pos, float(extra.get("r", 80.0)), extra.get("c", Color.ORANGE), true)
+			Sfx.play("orbital", 0.08, 90, -10.0)
 
 
 func _on_net_choices(choices: Array) -> void:
@@ -1959,7 +2064,7 @@ func _region_of(p: Vector2) -> String:
 	return "east"
 
 
-## 区域分割为厚墙单出入口：帮 AI 跨区时先精确对准唯一 164px 出入口再直奔目标！
+## 全图 3×3 九大区域每两相邻区都有唯一 164px 通道：帮 AI 跨区时精确寻路直奔最近通道！
 func doorway_waypoint(from: Vector2, to: Vector2) -> Vector2:
 	if game_mode != "pvp":
 		return to
@@ -1968,12 +2073,30 @@ func doorway_waypoint(from: Vector2, to: Vector2) -> Vector2:
 	if r_from == r_to:
 		return to
 	match r_from:
-		"nw": return Vector2(-1180.0, -740.0)
-		"ne": return Vector2(1180.0, -740.0)
-		"sw": return Vector2(-1180.0, 740.0)
-		"se": return Vector2(1180.0, 740.0)
-		"north": return Vector2(0.0, -740.0)
-		"south": return Vector2(0.0, 740.0)
+		"nw":
+			if r_to == "north" or r_to == "ne": return Vector2(-740.0, -1180.0)
+			if r_to == "west" or r_to == "sw": return Vector2(-1180.0, -740.0)
+			return Vector2(-740.0, -1180.0) if from.distance_squared_to(Vector2(-740.0, -1180.0)) < from.distance_squared_to(Vector2(-1180.0, -740.0)) else Vector2(-1180.0, -740.0)
+		"ne":
+			if r_to == "north" or r_to == "nw": return Vector2(740.0, -1180.0)
+			if r_to == "east" or r_to == "se": return Vector2(1180.0, -740.0)
+			return Vector2(740.0, -1180.0) if from.distance_squared_to(Vector2(740.0, -1180.0)) < from.distance_squared_to(Vector2(1180.0, -740.0)) else Vector2(1180.0, -740.0)
+		"sw":
+			if r_to == "south" or r_to == "se": return Vector2(-740.0, 1180.0)
+			if r_to == "west" or r_to == "nw": return Vector2(-1180.0, 740.0)
+			return Vector2(-740.0, 1180.0) if from.distance_squared_to(Vector2(-740.0, 1180.0)) < from.distance_squared_to(Vector2(-1180.0, 740.0)) else Vector2(-1180.0, 740.0)
+		"se":
+			if r_to == "south" or r_to == "sw": return Vector2(740.0, 1180.0)
+			if r_to == "east" or r_to == "ne": return Vector2(1180.0, 740.0)
+			return Vector2(740.0, 1180.0) if from.distance_squared_to(Vector2(740.0, 1180.0)) < from.distance_squared_to(Vector2(1180.0, 740.0)) else Vector2(1180.0, 740.0)
+		"north":
+			if r_to == "nw": return Vector2(-740.0, -1180.0)
+			if r_to == "ne": return Vector2(740.0, -1180.0)
+			return Vector2(0.0, -740.0)
+		"south":
+			if r_to == "sw": return Vector2(-740.0, 1180.0)
+			if r_to == "se": return Vector2(740.0, 1180.0)
+			return Vector2(0.0, 740.0)
 		"west":
 			if r_to == "nw": return Vector2(-1180.0, -740.0)
 			if r_to == "sw": return Vector2(-1180.0, 740.0)

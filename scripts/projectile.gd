@@ -143,17 +143,37 @@ func _physics_process(delta: float) -> void:
 			queue_free()
 			return
 
-	if visual_only:
-		return
-
 	var base_pad := 13.0 if weapon_id == "basin" else ((11.0 if evolved else 9.0) if (weapon_id == "fan" or weapon_id == "grimoire" or weapon_id == "halberd") else (8.0 if evolved else 6.0))
 	var hit_pad := base_pad * proj_scale
 	var travel_dir := velocity.normalized() if velocity.length_squared() > 0.01 else Vector2.RIGHT
+
+	# 联机客户端视觉投射物：撞到目标即刻消失并触发零延迟受击火花，避免子弹穿模丢失打击感！
+	if visual_only:
+		if weapon_id == "fan":
+			return
+		if game.game_mode == "survivor" and game.swarm != null:
+			for m in game.swarm.monsters:
+				var r := float(m["radius"]) + hit_pad
+				if position.distance_squared_to(m["pos"]) <= r * r:
+					game.spawn_hit_fx(position, travel_dir, color, false, false, src != null and src.is_player, true)
+					queue_free()
+					return
+			return
+		for a in game.archers:
+			if a == src or not a.alive or a.downed or (src != null and src.is_ally(a)):
+				continue
+			var hr := a.radius + hit_pad
+			if position.distance_squared_to(a.position) < hr * hr:
+				game.spawn_hit_fx(position, travel_dir, color, false, a.shield > 0.5, src != null and src.is_player, true)
+				queue_free()
+				return
+		return
+
 	var base_kb := _weapon_kb() * proj_scale
 
 	# --- 模式 1：幸存者怪潮命中 ---
 	if game.game_mode == "survivor" and game.swarm != null:
-		var crit_mult := 2.0
+		var crit_mult := 2.25 if (src != null and src.char_id == "grok") else 2.0
 		var is_crit := src != null and randf() < src.crit_chance
 		var dmg := damage * (crit_mult if is_crit else 1.0)
 		if src != null and src.char_id == "deepseek":
@@ -196,7 +216,7 @@ func _physics_process(delta: float) -> void:
 		return
 
 	# --- 模式 2：PVP 角色、中央 Mid Boss 与东房间野生数据怪命中 ---
-	var crit_m := 1.4
+	var crit_m := 1.65 if (src != null and src.char_id == "grok") else 1.4
 	if not game.mid_boss.is_empty():
 		var is_mc := src != null and randf() < src.crit_chance
 		var mdmg := damage * (crit_m if is_mc else 1.0)

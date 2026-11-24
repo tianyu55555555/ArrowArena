@@ -1061,7 +1061,7 @@ func _input(event: InputEvent) -> void:
 func _process(delta: float) -> void:
 	hint_time -= delta
 	banner_t = maxf(banner_t - delta, 0.0)
-	_dmg_flash = maxf(_dmg_flash - delta * 3.2, 0.0)
+	_dmg_flash = maxf(_dmg_flash - delta * 2.4, 0.0)
 	for f in feed:
 		f["t"] = float(f["t"]) - delta
 	feed.assign(feed.filter(func(f: Dictionary) -> bool: return float(f["t"]) > 0.0))
@@ -1396,17 +1396,17 @@ func _draw_overlay() -> void:
 
 
 func _draw_fx_overlay() -> void:
-	# 玩家受击四周微红边框闪烁反馈
+	# 玩家受击四周红边框闪烁反馈
 	if _dmg_flash > 0.01:
 		var vs := fx_overlay.size
-		var a := _dmg_flash * 0.34
-		var edge := 26.0
-		var c := Color(1.0, 0.16, 0.22, a)
+		var a := _dmg_flash * 0.44
+		var edge := 34.0
+		var c := Color(1.0, 0.14, 0.22, a)
 		fx_overlay.draw_rect(Rect2(0, 0, vs.x, edge), c)
 		fx_overlay.draw_rect(Rect2(0, vs.y - edge, vs.x, edge), c)
 		fx_overlay.draw_rect(Rect2(0, edge, edge, vs.y - edge * 2.0), c)
 		fx_overlay.draw_rect(Rect2(vs.x - edge, edge, edge, vs.y - edge * 2.0), c)
-		fx_overlay.draw_rect(Rect2(2, 2, vs.x - 4, vs.y - 4), Color(1.0, 0.25, 0.3, _dmg_flash * 0.65), false, 4.0)
+		fx_overlay.draw_rect(Rect2(2, 2, vs.x - 4, vs.y - 4), Color(1.0, 0.25, 0.3, _dmg_flash * 0.78), false, 5.0)
 
 	for sp in hud_sparks:
 		var k := 1.0 - float(sp["t"]) / float(sp["life"])

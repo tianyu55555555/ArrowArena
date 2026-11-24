@@ -145,6 +145,7 @@ var orbit_hit_cd: Dictionary = {}
 var clone_timer := 0.0
 var clone_offset := Vector2(56, -18)
 var clone_fire_cd := 0.0
+var _gemini_shots := 0
 var slow_timer := 0.0
 var kill_surge_timer := 0.0  # PVP 击杀敌人后的 3 秒迅捷移速激励
 var locate_timer := 4.5      # 开局 / 复活时的高亮「你在这里！」指引倒计时
@@ -211,7 +212,9 @@ func _apply_kit() -> void:
 	pickup_range = (155.0 * (MetaSave.magnet_mult() if is_player else 1.0)) if is_surv else 120.0
 
 	if weapon_id == "starblade":
-		bounce += 1
+		bounce += 2
+	elif weapon_id == "bow" or weapon_id == "halberd":
+		pierce += 1
 
 	match char_id:
 		"claude":
@@ -219,7 +222,7 @@ func _apply_kit() -> void:
 			shield = max_shield
 			attack_range *= 1.08
 		"grok":
-			crit_chance = 0.24 if is_surv else 0.15
+			crit_chance = 0.30 if is_surv else 0.26
 		"qwen":
 			pickup_range *= 1.45
 
@@ -290,8 +293,9 @@ func drop_half_level_and_respawn(spawn_pos: Vector2) -> void:
 		max_hp += 18.0
 		damage += 0.9
 		if char_id == "gpt":
-			fire_interval *= 0.98
-			move_speed *= 1.018
+			fire_interval *= 0.965
+			move_speed *= 1.022
+			damage *= 1.02
 	for sid in kept:
 		Skills.apply(self, sid)
 	radius = BASE_RADIUS * minf(1.0 + (level - 1) * 0.024, 1.42)
@@ -529,13 +533,31 @@ func _physics_process(delta: float) -> void:
 
 	if dash_timer > 0.0:
 		dash_timer -= delta
-		position += dash_dir * (move_speed * 2.85) * delta
+		position += dash_dir * (move_speed * 3.05) * delta
 		game.resolve_position(self)
 		if dash_timer <= 0.0:
-			var dmg_m := 1.25 if game.game_mode == "survivor" else 0.90
-			for i in 8:
-				game.spawn_projectile(self, Vector2.from_angle(i * TAU / 8.0), "halberd", dmg_m)
-			game.spawn_burst(position, color, 58.0)
+			var is_surv := (game.game_mode == "survivor")
+			var slash_r := 162.0 if is_surv else 148.0
+			game.spawn_eclipse_slash_fx(position, slash_r)
+			if is_surv and game.swarm != null:
+				game.swarm.damage_in_radius(position, slash_r, damage * 2.25, self, 0.0, 360.0)
+			else:
+				game.damage_pvp_creeps_in_radius(position, slash_r, damage * 1.55, self, 340.0)
+				game.damage_mid_boss_in_radius(position, slash_r, damage * 1.55, self, 340.0)
+				for e in game.archers:
+					if e == self or not e.alive or e.downed or is_ally(e):
+						continue
+					var hr := slash_r + e.radius
+					if position.distance_squared_to(e.position) <= hr * hr:
+						var push_d := (e.position - position).normalized() if position.distance_squared_to(e.position) > 1.0 else dash_dir
+						e.take_damage(damage * 1.45, self, true, push_d * 340.0)
+			var dmg_m := 1.32 if is_surv else 0.95
+			for i in 10:
+				game.spawn_projectile(self, Vector2.from_angle(i * TAU / 10.0), "halberd", dmg_m, 1.15)
+			game.spawn_burst(position, color, 68.0)
+			if is_player:
+				Sfx.play("shoot_halberd", 0.06, 60, -7.0)
+				game.add_shake(5.0)
 	else:
 		if is_player and not game.autotest:
 			_read_player_controls()
@@ -547,7 +569,7 @@ func _physics_process(delta: float) -> void:
 		if move_dir.length() > 1.0:
 			move_dir = move_dir.normalized()
 
-		var spd := move_speed * (0.60 if slow_timer > 0.0 else 1.0) * (1.30 if room_buff == "speed_lane" else 1.0) * (1.18 if kill_surge_timer > 0.0 else 1.0)
+		var spd := move_speed * (0.60 if slow_timer > 0.0 else 1.0) * (1.30 if room_buff == "speed_lane" else 1.0) * (1.18 if kill_surge_timer > 0.0 else 1.0) * (1.20 if rapid_timer > 0.0 else 1.0) * (1.15 if clone_timer > 0.0 else 1.0)
 		position += (move_dir * spd + knockback_vel) * delta
 		knockback_vel = knockback_vel.lerp(Vector2.ZERO, clampf(delta * 13.0, 0.0, 1.0))
 		if knockback_vel.length_squared() < 4.0:
@@ -556,7 +578,7 @@ func _physics_process(delta: float) -> void:
 
 		if wants_fire and fire_cd <= 0.0:
 			_shoot()
-			var mult := (0.68 if rapid_timer > 0.0 else 1.0) * (0.88 if room_buff == "overclock" else 1.0)
+			var mult := (0.64 if rapid_timer > 0.0 else 1.0) * (0.88 if room_buff == "overclock" else 1.0)
 			fire_cd = fire_interval * mult
 
 	if absf(aim_dir.x) > 0.08:
@@ -741,25 +763,32 @@ func _update_actives(delta: float) -> void:
 						var push_d := (e.position - position).normalized()
 						e.take_damage(damage * 0.58, self, false, push_d * 230.0)
 
-	# Gemini 星影双生分身
+	# Gemini 左右双侧星影分身（同时协同高射速发射追踪星刃！）
 	if clone_timer > 0.0:
-		clone_timer -= delta
+		clone_timer = maxf(0.0, clone_timer - delta)
 		clone_fire_cd -= delta
-		var cpos := position + clone_offset.rotated(sin(anim_t * 1.5) * 0.25)
 		if clone_fire_cd <= 0.0:
-			var cdir := aim_dir
-			if is_surv and game.swarm != null:
-				var near := game.swarm.find_nearest_pos(cpos, attack_range)
-				if near == Vector2.INF:
-					return
-				cdir = (near - cpos).normalized()
-			elif not wants_fire:
-				var t := game.find_nearest_enemy(self, attack_range)
-				if t == null:
-					return
-				cdir = (t.position - cpos).normalized()
-			game.spawn_projectile_at(self, cpos, cdir, "starblade", 0.65 if is_surv else 0.50)
-			clone_fire_cd = 0.34 if is_surv else 0.48
+			var sway := sin(anim_t * 1.8) * 0.22
+			var off1 := clone_offset.rotated(sway)
+			var off2 := Vector2(-clone_offset.x, clone_offset.y).rotated(-sway)
+			var fired_any := false
+			for off_v in [off1, off2]:
+				var cpos := position + (off_v as Vector2)
+				var cdir := aim_dir
+				if is_surv and game.swarm != null:
+					var near := game.swarm.find_nearest_pos(cpos, attack_range * 1.15)
+					if near == Vector2.INF:
+						continue
+					cdir = (near - cpos).normalized()
+				elif not wants_fire:
+					var t := game.find_nearest_enemy(self, attack_range * 1.1)
+					if t == null:
+						continue
+					cdir = (t.position - cpos).normalized()
+				game.spawn_projectile_at(self, cpos, cdir, "starblade", 0.78 if is_surv else 0.65, 1.08)
+				fired_any = true
+			if fired_any:
+				clone_fire_cd = 0.26 if is_surv else 0.34
 
 
 ## 幸存者模式：全 6 位 AI 支援副武器 + 2 阶 MoE 混合专家协同
@@ -874,8 +903,9 @@ func trigger_active_skill() -> bool:
 	active_cd = active_cd_total()
 	var is_surv := (game.game_mode == "survivor")
 	var cd_data := Characters.get_data(char_id)
+	if is_human():
+		game.spawn_text(position + Vector2(0, -radius - 34), "【%s】！" % cd_data["active_name"], accent_color, 21, true)
 	if is_player:
-		game.spawn_text(position + Vector2(0, -radius - 34), "【%s】！" % cd_data["active_name"], accent_color, 20)
 		Sfx.play("skill", 0.04, 150, -7.0)
 	match char_id:
 		"claude":
@@ -884,16 +914,25 @@ func trigger_active_skill() -> bool:
 			shield = max_shield
 			game.spawn_burst(position, accent_color, 85.0)
 		"gpt":
-			rapid_timer = 4.5 if is_surv else 3.8
-			var cnt := 14 if is_surv else 10
-			for i in cnt:
-				game.spawn_projectile(self, Vector2.from_angle(i * TAU / float(cnt)), "bow", 1.0 if is_surv else 0.78)
-			game.spawn_burst(position, accent_color, 64.0)
+			rapid_timer = 5.0 if is_surv else 4.5
+			var base_a := aim_dir.angle()
+			# 正前方 5 支贯穿龙羽重箭集火齐射 + 8 支护身圣光环箭！
+			for fi in 5:
+				var fang := base_a + (float(fi) - 2.0) * 0.11
+				game.spawn_projectile(self, Vector2.from_angle(fang), "bow", 1.22 if is_surv else 0.95, 1.22, 1)
+			var ring_cnt := 10 if is_surv else 8
+			for i in ring_cnt:
+				game.spawn_projectile(self, Vector2.from_angle(base_a + i * TAU / float(ring_cnt)), "bow", 0.95 if is_surv else 0.72, 1.05)
+			game.spawn_burst(position, accent_color, 72.0)
+			game.spawn_buff_aura(self, accent_color)
 		"grok":
 			dash_dir = move_dir.normalized() if move_dir.length() > 0.1 else aim_dir.normalized()
-			dash_timer = 0.24
-			invuln = maxf(invuln, 0.55)
-			game.spawn_burst(position, color, 45.0)
+			dash_timer = 0.26
+			invuln = maxf(invuln, 0.65)
+			kill_surge_timer = maxf(kill_surge_timer, 2.5)
+			game.spawn_burst(position, color, 54.0)
+			if is_player:
+				Sfx.play("dash", 0.06, 60, -7.0)
 		"deepseek":
 			# 天降大铁盆：锁定目标区，从高空错峰轰下 3 只巨型精钢铁盆（正中 2.25x 超巨型 + 两侧护航巨盆）！
 			var dir := aim_dir.normalized()
@@ -930,9 +969,14 @@ func trigger_active_skill() -> bool:
 			orbit_hit_cd.clear()
 			game.spawn_burst(position, accent_color, 65.0)
 		"gemini":
-			clone_timer = 7.0 if is_surv else 5.5
-			clone_fire_cd = 0.1
-			game.spawn_burst(position + clone_offset, accent_color, 46.0)
+			clone_timer = 8.0 if is_surv else 6.5
+			clone_fire_cd = 0.08
+			var sh_grant := max_hp * 0.18
+			max_shield = maxf(max_shield, sh_grant)
+			shield = maxf(shield, sh_grant)
+			game.spawn_burst(position + clone_offset, accent_color, 48.0)
+			game.spawn_burst(position + Vector2(-clone_offset.x, clone_offset.y), accent_color, 48.0)
+			game.spawn_buff_aura(self, accent_color)
 	return true
 
 
@@ -985,11 +1029,13 @@ func _shoot() -> void:
 	if is_player:
 		Sfx.play("shoot_" + weapon_id, 0.07, 65, -12.0)
 
-	var res_prob := 0.35 if game.game_mode == "survivor" else 0.22
-	if char_id == "gemini" and randf() < res_prob:
-		var extra_ang := base + randf_range(-0.14, 0.14)
-		var g_scale := (1.2 if is_evo else 1.0) * (1.65 if has_rune("big_bullet") else 1.0)
-		game.spawn_projectile(self, Vector2.from_angle(extra_ang), "starblade", 0.62 * dmg_room, g_scale, 0, 0.0, 0, is_evo)
+	if char_id == "gemini":
+		_gemini_shots += 1
+		var res_prob := 0.45 if game.game_mode == "survivor" else 0.38
+		if _gemini_shots % 3 == 0 or randf() < res_prob:
+			var extra_ang := base + randf_range(-0.11, 0.11)
+			var g_scale := (1.28 if is_evo else 1.15) * (1.65 if has_rune("big_bullet") else 1.0)
+			game.spawn_projectile(self, Vector2.from_angle(extra_ang), "starblade", 0.88 * dmg_room, g_scale, 0, 0.0, 0, is_evo)
 
 	recoil = 1.0
 
@@ -1044,10 +1090,12 @@ func take_damage(amount: float, attacker: Archer, is_crit := false, hit_impulse 
 	if kb != Vector2.ZERO:
 		knockback_vel = (knockback_vel + kb).limit_length(520.0)
 
-	# 方向性受击火花与冲击波特效
+	# 方向性受击火花与冲击波特效（优先保留玩家打人/受击与暴击特效，并完整同步给联机客户端！）
 	var fx_dir := kb.normalized() if kb.length_squared() > 0.01 else Vector2.RIGHT
 	var fx_col := Color(1.0, 0.42, 0.36) if self == game.player else (attacker.accent_color if valid_attacker else Color(1.0, 0.9, 0.55))
-	game.spawn_hit_fx(position - fx_dir * (radius * 0.35), fx_dir, fx_col, is_crit, shield_hit)
+	var an := attacker.net_id if valid_attacker else 0
+	var prio := is_crit or self == game.player or (valid_attacker and attacker.is_human()) or is_human()
+	game.spawn_hit_fx(position - fx_dir * (radius * 0.35), fx_dir, fx_col, is_crit, shield_hit, prio, false, an, net_id)
 
 	var col := Color.WHITE
 	if is_crit:
@@ -1057,27 +1105,30 @@ func take_damage(amount: float, attacker: Archer, is_crit := false, hit_impulse 
 	elif valid_attacker and attacker == game.player:
 		col = Color(1.0, 0.92, 0.38)
 	var txt := ("暴击 %d!" % int(amount)) if is_crit else str(int(amount))
-	game.spawn_text(position + Vector2(randf_range(-14, 14), -radius - 16), txt, col, 22 if is_crit else 18)
+	game.spawn_text(position + Vector2(randf_range(-14, 14), -radius - 16), txt, col, 24 if is_crit else 19, prio)
 
 	if self == game.player:
-		Sfx.play("crit" if is_crit else "hit", 0.08, 45, -10.0)
-		game.add_shake(6.0 if is_crit else 4.2)
-		if game.hud != null:
-			game.hud.trigger_damage_vignette(0.85 if is_crit else 0.58)
-	elif valid_attacker and attacker == game.player:
-		Sfx.play("crit" if is_crit else "hit", 0.08, 45, -11.0)
+		Sfx.play("hit_taken", 0.06, 50, -5.5)
 		if is_crit:
-			game.add_shake(2.6)
+			Sfx.play("crit", 0.06, 45, -7.0)
+		game.add_shake(7.5 if is_crit else 5.2)
+		if game.hud != null:
+			game.hud.trigger_damage_vignette(0.95 if is_crit else 0.72)
+	elif valid_attacker and attacker == game.player:
+		Sfx.play("crit" if is_crit else "hit", 0.08, 40, -6.5 if is_crit else -8.5)
+		game.add_shake(4.0 if is_crit else 1.8)
 
 	if valid_attacker:
 		if attacker.antiheal_power > 0.0:
 			var was_ah := antiheal_timer > 0.0
 			apply_antiheal(attacker.antiheal_power, 4.0)
 			if not was_ah:
-				game.spawn_text(position + Vector2(0, -radius - 34), "重伤 -%d%%治疗!" % int(round(antiheal_ratio * 100.0)), Color("#d45cff"), 16)
+				game.spawn_text(position + Vector2(0, -radius - 34), "重伤 -%d%%治疗!" % int(round(antiheal_ratio * 100.0)), Color("#d45cff"), 16, true)
 		var ls := attacker.effective_lifesteal()
 		if ls > 0.0:
 			attacker.heal_hp(amount * ls)
+		if is_crit and attacker.char_id == "grok":
+			attacker.heal_hp(amount * 0.12)
 	if hp <= 0.0:
 		# Mid Boss 复活甲：致命一击触发黄金浴火重生（回复 75% 生命 + 2.2s 无敌 + 震退周遭敌人！）
 		if revive_charges > 0:
@@ -1167,8 +1218,9 @@ func level_up() -> void:
 	hp = minf(max_hp, hp + hp_inc + max_hp * (0.25 if is_surv else 0.14))
 	damage += (2.4 if is_surv else 0.9)
 	if char_id == "gpt":
-		fire_interval *= 0.98
-		move_speed *= 1.018
+		fire_interval *= 0.965
+		move_speed *= 1.022
+		damage *= 1.02
 	radius = BASE_RADIUS * minf(1.0 + (level - 1) * 0.024, 1.42)
 	refresh_pvp_score()
 	if is_player:
@@ -1418,6 +1470,11 @@ func _draw() -> void:
 	if not weapon_behind:
 		_draw_weapon(sc)
 
+	if hit_flash > 0.0:
+		var hf := clampf(hit_flash / 0.16, 0.0, 1.0)
+		draw_circle(Vector2.ZERO, radius * (1.12 + (1.0 - hf) * 0.25), Color(1.0, 0.92, 0.85, 0.34 * hf))
+		draw_arc(Vector2.ZERO, radius * (1.16 + (1.0 - hf) * 0.35), 0.0, TAU, 24, Color(1.0, 0.42, 0.36, 0.85 * hf), 3.4 * hf + 0.8)
+
 	if shield > 0.5:
 		draw_arc(Vector2.ZERO, radius + 3.0, 0.0, TAU, 28, Color(1.0, 0.82, 0.45, 0.72), 2.5)
 
@@ -1433,10 +1490,13 @@ func _draw() -> void:
 		draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
 
 	if clone_timer > 0.0 and not _frames.is_empty():
-		var cpos := clone_offset.rotated(sin(anim_t * 1.5) * 0.25)
-		draw_circle(cpos, 24.0, Color(accent_color, 0.22))
-		var csz := spr_sz * 0.85
-		draw_texture_rect(_frames[0], Rect2(cpos.x - csz * 0.5, cpos.y - csz * 0.6, csz, csz), false, Color(0.85, 0.92, 1.0, 0.78))
+		var sway := sin(anim_t * 1.8) * 0.22
+		var csz := spr_sz * 0.84
+		for cpos in [clone_offset.rotated(sway), Vector2(-clone_offset.x, clone_offset.y).rotated(-sway)]:
+			var cp: Vector2 = cpos
+			draw_circle(cp, 25.0, Color(accent_color, 0.26))
+			draw_arc(cp, 26.0, anim_t * 3.0, anim_t * 3.0 + PI * 1.4, 20, Color(accent_color, 0.72), 2.0)
+			draw_texture_rect(_frames[0], Rect2(cp.x - csz * 0.5, cp.y - csz * 0.6, csz, csz), false, Color(0.86, 0.94, 1.0, 0.82))
 
 	var w := 58.0 * sc
 	var top := -spr_sz * 0.66 - 10.0

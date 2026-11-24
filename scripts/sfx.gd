@@ -137,10 +137,12 @@ func _build_all_sounds() -> void:
 	_streams["shoot_fan"] = _synth_sweep(0.11, 440.0, 740.0, "tri", 0.28, 0.22)
 	_streams["shoot_starblade"] = _synth_sweep(0.075, 1180.0, 720.0, "sine", 0.32, 0.05)
 
-	# 命中 / 暴击 / 击杀 / 拾取
-	_streams["hit"] = _synth_sweep(0.055, 220.0, 95.0, "tri", 0.30, 0.25)
-	_streams["crit"] = _synth_chord([880.0, 1318.5], 0.11, "tri", 0.34, 1.05)
-	_streams["kill"] = _synth_sweep(0.16, 480.0, 120.0, "saw", 0.30, 0.28)
+	# 命中 / 受击 / 暴击 / 击杀 / 冲刺 / 拾取
+	_streams["hit"] = _synth_sweep(0.068, 280.0, 92.0, "tri", 0.44, 0.32)
+	_streams["hit_taken"] = _synth_sweep(0.115, 165.0, 52.0, "saw", 0.50, 0.36)
+	_streams["crit"] = _synth_chord([920.0, 1396.9], 0.13, "tri", 0.48, 1.08)
+	_streams["kill"] = _synth_sweep(0.18, 520.0, 115.0, "saw", 0.40, 0.30)
+	_streams["dash"] = _synth_sweep(0.14, 580.0, 190.0, "saw", 0.36, 0.38)
 	_streams["orb"] = _synth_sweep(0.065, 760.0, 1080.0, "sine", 0.24, 0.0)
 	_streams["heart"] = _synth_arpeggio([523.25, 659.25, 783.99], 0.065, "sine", 0.32)
 

@@ -1008,17 +1008,22 @@ func _damage_index(idx: int, dmg: float, is_crit: bool, attacker: Archer, kb: Ve
 
 	var mp: Vector2 = m["pos"]
 	var fx_dir := kb.normalized() if kb.length_squared() > 0.01 else Vector2.RIGHT
-	game.spawn_hit_fx(mp - fx_dir * (float(m["radius"]) * 0.3), fx_dir, fx_col, is_crit, false)
+	var an := attacker.net_id if (attacker != null and is_instance_valid(attacker)) else 0
+	var prio := is_crit or bool(m["is_boss"]) or (attacker == game.player)
+	game.spawn_hit_fx(mp - fx_dir * (float(m["radius"]) * 0.3), fx_dir, fx_col, is_crit, false, prio, false, an, 0)
 
-	if attacker != null and attacker.lifesteal > 0.0:
-		attacker.hp = minf(attacker.max_hp, attacker.hp + dmg * attacker.lifesteal)
+	if attacker != null and is_instance_valid(attacker):
+		if attacker.lifesteal > 0.0:
+			attacker.hp = minf(attacker.max_hp, attacker.hp + dmg * attacker.lifesteal)
+		if is_crit and attacker.char_id == "grok":
+			attacker.hp = minf(attacker.max_hp, attacker.hp + dmg * 0.12)
 
 	var col := Color(1.0, 0.52, 0.18) if is_crit else Color(1.0, 0.94, 0.55)
 	game.spawn_text(mp + Vector2(randf_range(-10, 10), -float(m["radius"]) - 8),
-		("%d!" % int(dmg)) if is_crit else str(int(dmg)), col, 21 if is_crit else 16)
-	Sfx.play("crit" if is_crit else "hit", 0.08, 45, -13.0)
-	if is_crit:
-		game.add_shake(2.2)
+		("%d!" % int(dmg)) if is_crit else str(int(dmg)), col, 22 if is_crit else 17, prio)
+	if attacker == game.player or attacker == null:
+		Sfx.play("crit" if is_crit else "hit", 0.08, 42, -7.5 if is_crit else -10.0)
+		game.add_shake(3.0 if is_crit else 1.1)
 
 	if float(m["hp"]) <= 0.0:
 		_kill_index(idx, attacker)
