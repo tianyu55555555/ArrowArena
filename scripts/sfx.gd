@@ -83,8 +83,23 @@ func _ready() -> void:
 		_players.append(p)
 	_bgm_player = AudioStreamPlayer.new()
 	_bgm_player.bus = "Master"
+	_bgm_player.finished.connect(_on_bgm_finished)
 	add_child(_bgm_player)
 	_build_all_sounds()
+
+
+func _on_bgm_finished() -> void:
+	call_deferred("_restart_bgm_safe")
+
+
+func _restart_bgm_safe() -> void:
+	if bgm_muted or _bgm_track == "" or DisplayServer.get_name() == "headless":
+		return
+	if _bgm_player == null or not is_instance_valid(_bgm_player):
+		return
+	if not _bgm_player.playing and _bgm_streams.has(_bgm_track):
+		_bgm_player.stream = _bgm_streams[_bgm_track]
+		_bgm_player.play(0.0)
 
 
 func _play_bgm_internal(track: String, force := false) -> void:
@@ -173,6 +188,9 @@ func _make_wav(samples: PackedFloat32Array, rate := MIX_RATE) -> AudioStreamWAV:
 	wav.format = AudioStreamWAV.FORMAT_16_BITS
 	wav.mix_rate = rate
 	wav.stereo = false
+	wav.loop_mode = AudioStreamWAV.LOOP_DISABLED
+	wav.loop_begin = 0
+	wav.loop_end = 0
 	wav.data = bytes
 	return wav
 
@@ -362,8 +380,13 @@ func _synth_bgm(track: String) -> AudioStreamWAV:
 			lp = lerpf(lp, sample, 0.36)
 			buf[idx] = clampf(lp, -0.95, 0.95)
 
+	# 首尾极短平滑淡入淡出，杜绝切回首拍时的爆音；禁用原生 LOOP_FORWARD 改由 finished 信号重播，彻底规避 Android ARM64 下 AudioStreamWAV.loop_end 越界闪退！
+	var fade_in := mini(96, total / 8)
+	for fi in fade_in:
+		buf[fi] *= float(fi) / float(fade_in)
+	var fade_out := mini(160, total / 8)
+	for fo in fade_out:
+		buf[total - 1 - fo] *= float(fo) / float(fade_out)
+
 	var wav := _make_wav(buf, rate)
-	wav.loop_mode = AudioStreamWAV.LOOP_FORWARD
-	wav.loop_begin = 0
-	wav.loop_end = total
 	return wav
